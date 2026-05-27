@@ -12,6 +12,7 @@ type Profile = {
   role: UserRole;
   avatar_url: string | null;
   created_at: string | null;
+  is_active: boolean;
 };
 
 export const Route = createFileRoute("/admin")({
@@ -42,9 +43,9 @@ function AdminPage() {
     setError(null);
 
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, avatar_url, created_at")
-      .order("created_at", { ascending: false });
+    .from("profiles")
+    .select("id, email, full_name, role, avatar_url, created_at, is_active")
+    .order("created_at", { ascending: false });
 
     if (error) {
       setError(error.message);
@@ -231,21 +232,33 @@ function AdminPage() {
                       </td>
 
                       <td className="px-5 py-3">
-                        <select
-                          value={profile.role}
-                          disabled={savingId === profile.id}
-                          onChange={(e) =>
-                            updateRole(profile.id, e.target.value as UserRole)
-                          }
-                          className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                        >
-                          {ROLE_OPTIONS.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+  <div className="flex flex-col gap-2">
+    <select
+      value={profile.role}
+      disabled={savingId === profile.id}
+      onChange={(e) =>
+        updateRole(profile.id, e.target.value as UserRole)
+      }
+      className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+    >
+      {ROLE_OPTIONS.map((role) => (
+        <option key={role} value={role}>
+          {role}
+        </option>
+      ))}
+    </select>
+
+    <div
+      className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium ${
+        profile.is_active
+          ? "bg-green-500/15 text-green-400"
+          : "bg-red-500/15 text-red-400"
+      }`}
+    >
+      {profile.is_active ? "Actif" : "Désactivé"}
+    </div>
+  </div>
+</td>
 
                       <td className="px-5 py-3 text-muted-foreground">
                         {profile.created_at

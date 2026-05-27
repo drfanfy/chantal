@@ -42,10 +42,11 @@ import {
       }
   
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role, avatar_url")
-        .eq("id", currentUser.id)
-        .single();
+      .from("profiles")
+      .select("id, email, full_name, role, avatar_url, is_active")
+      .eq("id", currentUser.id)
+      .eq("is_active", true)
+      .single();
   
       if (error) {
         console.error("Erreur chargement profil:", error);
