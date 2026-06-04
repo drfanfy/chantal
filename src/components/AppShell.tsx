@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 import { TopNav } from "@/components/TopNav";
+import { FeedbackButton } from "@/components/FeedbackButton";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
 const { profile, signOut } = useAuth();
@@ -54,6 +55,7 @@ async function handleSignOut() {
 </div>
       </header>
       <div className="flex flex-1 min-h-0">{children}</div>
+      <FeedbackButton />
     </div>
   );
 }

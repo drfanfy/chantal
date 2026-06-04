@@ -2,7 +2,6 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { ChatInterface } from "@/components/ChatInterface";
-import { ModelAgentSelector } from "@/components/ModelAgentSelector";
 import { WorkflowView } from "@/components/WorkflowView";
 import { useApp } from "@/lib/appContext";
 import { useEffect } from "react";
@@ -26,7 +25,7 @@ export const Route = createFileRoute("/chat/$conversationId")({
 
 function ChatPage() {
   const { conversationId } = Route.useParams();
-  const { conversations, setActiveConversation, activeConversationId } = useApp();
+  const { conversations, conversationsLoaded, setActiveConversation, activeConversationId } = useApp();
   const navigate = useNavigate();
 
   const conv = conversations.find(c => c.id === conversationId);
@@ -38,6 +37,17 @@ function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, conv]);
+
+  // Attendre le chargement DB avant de conclure que la conversation est introuvable
+  if (!conversationsLoaded) {
+    return (
+      <AppShell>
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+          Chargement…
+        </div>
+      </AppShell>
+    );
+  }
 
   if (!conv) throw notFound();
 
@@ -54,15 +64,8 @@ function ChatPage() {
   return (
     <AppShell>
       <ConversationSidebar />
-      <main className="flex-1 min-w-0">
-        <div className="h-full flex flex-col">
-          <div className="px-6 pt-3 pb-1 flex justify-end">
-            <ModelAgentSelector compact />
-          </div>
-          <div className="flex-1 min-h-0">
-            <ChatInterface />
-          </div>
-        </div>
+      <main className="flex-1 min-w-0 min-h-0">
+        <ChatInterface />
       </main>
     </AppShell>
   );

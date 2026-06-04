@@ -95,18 +95,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { error: profileInsertError } = await supabaseAdmin
+    // upsert : gère à la fois l'absence de trigger ET le cas où
+    // handle_new_user a déjà créé la ligne (évite le duplicate key).
+    const { error: profileUpsertError } = await supabaseAdmin
       .from("profiles")
-      .insert({
-        id: createdUser.user.id,
-        email,
-        full_name,
-        role,
-      });
+      .upsert(
+        {
+          id: createdUser.user.id,
+          email,
+          full_name,
+          role,
+          is_active: true,
+        },
+        { onConflict: "id" }
+      );
 
-    if (profileInsertError) {
+    if (profileUpsertError) {
       return new Response(
-        JSON.stringify({ error: profileInsertError.message }),
+        JSON.stringify({ error: profileUpsertError.message }),
         { status: 400,
             headers: corsHeaders, }
       );

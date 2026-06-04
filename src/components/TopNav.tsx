@@ -1,28 +1,29 @@
 import { getCurrentUser } from "@/lib/auth";
 import { useApp } from "@/lib/appContext";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { MessageSquare, Zap, BookOpen, Users, GraduationCap, BarChart3, Wand2, ChevronDown, Search, Shield } from "lucide-react";
+import { MessageSquare, Zap, BookOpen, Users, GraduationCap, BarChart3, Wand2, ChevronDown, Search, Shield, Ticket } from "lucide-react";
 import type { ViewMode } from "@/lib/appContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/authContext";
 import { prompts, promptCategories, type PromptCategory } from "@/lib/data";
 
 interface NavEntry {
-  id: ViewMode | "studio" | "chat-link" | "admin-link";
+  id: ViewMode | "studio" | "chat-link" | "admin-link" | "tickets-link";
   label: string;
   icon: React.ReactNode;
   to?: string;
 }
 
 const entries: NavEntry[] = [
-  { id: "chat-link", label: "Chat", icon: <MessageSquare className="w-3.5 h-3.5" />, to: "/chat" },
-  { id: "workflow", label: "Workflows", icon: <Zap className="w-3.5 h-3.5" /> },
-  { id: "prompts", label: "Prompts", icon: <BookOpen className="w-3.5 h-3.5" /> },
-  { id: "partners", label: "Partenaires", icon: <Users className="w-3.5 h-3.5" /> },
-  { id: "formation", label: "Formations", icon: <GraduationCap className="w-3.5 h-3.5" /> },
-  { id: "admin", label: "Reporting", icon: <BarChart3 className="w-3.5 h-3.5" /> },
-  { id: "studio", label: "Studio IA", icon: <Wand2 className="w-3.5 h-3.5" /> },
-  { id: "admin-link", label: "Admin", icon: <Shield className="w-3.5 h-3.5" />, to: "/admin" },
+  { id: "chat-link",    label: "Chat",        icon: <MessageSquare className="w-3.5 h-3.5" />, to: "/chat"    },
+  { id: "workflow",     label: "Workflows",   icon: <Zap           className="w-3.5 h-3.5" />               },
+  { id: "prompts",      label: "Prompts",     icon: <BookOpen      className="w-3.5 h-3.5" />               },
+  { id: "partners",     label: "Partenaires", icon: <Users         className="w-3.5 h-3.5" />               },
+  { id: "formation",    label: "Formations",  icon: <GraduationCap className="w-3.5 h-3.5" />               },
+  { id: "admin",        label: "Reporting",   icon: <BarChart3     className="w-3.5 h-3.5" />               },
+  { id: "studio",       label: "Studio IA",   icon: <Wand2         className="w-3.5 h-3.5" />               },
+  { id: "tickets-link", label: "Tickets",     icon: <Ticket        className="w-3.5 h-3.5" />, to: "/tickets"},
+  { id: "admin-link",   label: "Admin",       icon: <Shield        className="w-3.5 h-3.5" />, to: "/admin"  },
 ];
 
 export function TopNav() {
@@ -62,6 +63,13 @@ export function TopNav() {
       navigate({ to: "/admin" });
       return;
     }
+
+    if (e.id === "tickets-link") {
+      setActiveConversation(null);
+      setActiveWorkflow(null);
+      navigate({ to: "/tickets" });
+      return;
+    }
     setActiveConversation(null);
     if (e.id === "workflow") {
       setActiveWorkflow(null);
@@ -99,7 +107,7 @@ export function TopNav() {
       {entries
 .filter((e) => {
   if (
-    (e.id === "studio" || e.id === "admin" || e.id === "admin-link") &&
+    (e.id === "studio" || e.id === "admin" || e.id === "admin-link" || e.id === "tickets-link") &&
     role !== "admin" && role !== "super_admin"
   ) {
     return false;

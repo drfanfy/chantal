@@ -1,11 +1,15 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { supabase } from "./supabase";
 
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  file?: { name: string; type: string };
+  speakerName?: string;       // nom de l'IA au moment de l'envoi (figé par message)
+  speakerAvatarUrl?: string | null;  // avatar URL de l'IA au moment de l'envoi
+  speakerIcon?: string | null;       // emoji icon de l'agent au moment de l'envoi
+  files?: { name: string; type: string; url?: string }[];
 }
 
 export interface Conversation {
@@ -28,6 +32,7 @@ export interface FavoriteRef { kind: FavoriteKind; id: string }
 
 interface AppState {
   conversations: Conversation[];
+  conversationsLoaded: boolean;
   activeConversationId: string | null;
   currentModel: string;
   currentAgent: string;
@@ -57,6 +62,8 @@ interface AppContextType extends AppState {
   isFavorite: (ref: FavoriteRef) => boolean;
   setPendingPrefill: (text: string) => void;
   consumePrefill: () => string;
+  prepareConversation: (id: string, title: string) => void;
+  loadConversationsFromDB: (userId: string) => Promise<void>;
 }
 
 const fakeUsers = ["François", "Justine", "Marie", "Antoine", "Claire", "Thomas", "Sophie", "Lucas"];
@@ -125,7 +132,8 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
-    conversations: seedConversations,
+    conversations: [],
+    conversationsLoaded: false,
     activeConversationId: null,
     currentModel: "Claude",
     currentAgent: "Aucun",
@@ -184,7 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.favorites]);
 
   const createConversation = useCallback((title: string, type: "chat" | "workflow") => {
-    const id = `c-${Date.now()}`;
+    const id = crypto.randomUUID();
     setState(s => {
       const conv: Conversation = { id, title, user: pickUser(), date: new Date(), messages: [], model: s.currentModel, agent: s.currentAgent, partnerId: s.currentPartner, type };
       return { ...s, conversations: [conv, ...s.conversations], activeConversationId: id };
@@ -201,7 +209,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => {
       let convId = s.activeConversationId;
       if (!convId) {
-        const id = `c-${Date.now()}`;
+        const id = crypto.randomUUID();
         const conv: Conversation = { id, title: m.content.slice(0, 40) || "Nouvelle conversation", user: s.currentUser, date: new Date(), messages: [message], model: s.currentModel, agent: s.currentAgent, partnerId: s.currentPartner, type: "chat" };
         return { ...s, conversations: [conv, ...s.conversations], activeConversationId: id };
       }
@@ -219,8 +227,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return val;
   }, []);
 
+  const prepareConversation = useCallback((id: string, title: string) => {
+    setState(s => {
+      if (s.conversations.some(c => c.id === id)) return s;
+      const conv: Conversation = { id, title, user: s.currentUser, date: new Date(), messages: [], model: s.currentModel, agent: s.currentAgent, partnerId: s.currentPartner, type: "chat" };
+      return { ...s, conversations: [conv, ...s.conversations], activeConversationId: id };
+    });
+  }, []);
+
+  const loadConversationsFromDB = useCallback(async (userId: string) => {
+    console.log("[DB] Chargement conversations pour", userId.slice(0, 8) + "…");
+
+    // Utiliser le nom de la FK explicitement pour éviter une erreur d'ambiguïté
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("id, title, created_at, updated_at, messages!conversation_id(id, role, content, speaker_name, speaker_avatar_url, speaker_icon, created_at)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error("[DB] Erreur chargement:", error.message, "code:", error.code);
+      // Marquer comme chargé même en cas d'erreur pour ne pas bloquer les routes
+      setState(s => ({ ...s, conversationsLoaded: true }));
+      return;
+    }
+
+    console.log("[DB] Conversations reçues:", data?.length ?? 0);
+
+    type DBMsg = { id: string; role: string; content: string; speaker_name: string | null; speaker_avatar_url: string | null; speaker_icon: string | null; created_at: string };
+    type DBConv = { id: string; title: string | null; created_at: string; updated_at: string; messages: DBMsg[] };
+
+    const loaded: Conversation[] = (data as DBConv[] ?? []).map(c => ({
+      id: c.id,
+      title: c.title ?? "Conversation",
+      user: userId,
+      date: new Date(c.updated_at ?? c.created_at),
+      messages: (c.messages ?? [])
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .map(m => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          speakerName: m.speaker_name ?? undefined,
+          speakerAvatarUrl: m.speaker_avatar_url ?? undefined,
+          speakerIcon: m.speaker_icon ?? undefined,
+          timestamp: new Date(m.created_at),
+        })),
+      model: "Groq",
+      agent: "Aucun",
+      partnerId: null,
+      type: "chat" as const,
+    }));
+
+    setState(s => ({ ...s, conversations: loaded, conversationsLoaded: true, activeConversationId: null }));
+  }, []);
+
   return (
-    <AppContext.Provider value={{ ...state, setCurrentModel, setCurrentAgent, setCurrentPartner, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, addMessage, createConversation, renameConversation, toggleSidebar, toggleFavorite, isFavorite, setPendingPrefill, consumePrefill }}>
+    <AppContext.Provider value={{ ...state, setCurrentModel, setCurrentAgent, setCurrentPartner, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, addMessage, createConversation, renameConversation, toggleSidebar, toggleFavorite, isFavorite, setPendingPrefill, consumePrefill, prepareConversation, loadConversationsFromDB }}>
       {children}
     </AppContext.Provider>
   );

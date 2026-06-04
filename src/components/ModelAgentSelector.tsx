@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/lib/appContext";
-import { models, agents, partners } from "@/lib/data";
-import { partnerImages } from "@/lib/partnerImages";
+import { useAIConfig, type AIPartner } from "@/lib/useAIConfig";
 import { ChevronDown, Cpu, Sparkles, Users, Check } from "lucide-react";
 
-export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
+export function ModelAgentSelector({ compact = false, dropUp = false }: { compact?: boolean; dropUp?: boolean }) {
   const { currentModel, currentAgent, currentPartner, setCurrentModel, setCurrentAgent, setCurrentPartner } = useApp();
+  const { models, agents, partners, loading } = useAIConfig();
   const [open, setOpen] = useState<"partner" | "model" | "agent" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -24,32 +24,49 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
       <div ref={ref} className="flex items-center justify-end gap-1.5 flex-wrap">
         <CompactPill
           label={activePartner?.name ?? "Aucun partenaire"}
-          icon={activePartner ? (
-            <img src={partnerImages[activePartner.id]} alt={activePartner.name} className="w-4 h-4 rounded-full object-cover" />
-          ) : <Users className="w-3 h-3 text-violet-600" />}
+          icon={
+            activePartner ? (
+              <PartnerAvatar partner={activePartner} size="sm" />
+            ) : (
+              <Users className="w-3 h-3 text-violet-600" />
+            )
+          }
           accent="violet"
           active={open === "partner"}
           onClick={() => setOpen(o => (o === "partner" ? null : "partner"))}
         >
           {open === "partner" && (
-            <Dropdown align="right">
+            <Dropdown align="right" dropUp={dropUp}>
               <DropdownItem
                 selected={!currentPartner}
                 onClick={() => { setCurrentPartner(null); setOpen(null); }}
-                icon={<div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">—</div>}
-                title="Aucun partenaire" sub="Mode libre"
+                icon={<div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-sm">—</div>}
+                title="Aucun partenaire"
+                sub="Mode libre"
               />
+              {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+              {!loading && partners.length === 0 && (
+                <div className="px-2 py-3 text-xs text-muted-foreground">Aucun partenaire configuré</div>
+              )}
               {partners.map(p => (
                 <DropdownItem
-                  key={p.id} selected={currentPartner === p.id}
-                  onClick={() => { setCurrentModel(p.model); setCurrentAgent(p.agent); setCurrentPartner(p.id); setOpen(null); }}
-                  icon={<div className="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-border"><img src={partnerImages[p.id]} alt={p.name} className="w-full h-full object-cover" /></div>}
-                  title={p.name} sub={p.expertise}
+                  key={p.id}
+                  selected={currentPartner === p.id}
+                  onClick={() => {
+                    if (p.model) setCurrentModel(p.model.name);
+                    if (p.agent) setCurrentAgent(p.agent.name);
+                    setCurrentPartner(p.id);
+                    setOpen(null);
+                  }}
+                  icon={<div className="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-border flex items-center justify-center bg-muted"><PartnerAvatar partner={p} size="md" /></div>}
+                  title={p.name}
+                  sub={p.description ?? ""}
                 />
               ))}
             </Dropdown>
           )}
         </CompactPill>
+
         <CompactPill
           label={currentModel}
           icon={<Cpu className="w-3 h-3 text-blue-600" />}
@@ -58,17 +75,25 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
           onClick={() => setOpen(o => (o === "model" ? null : "model"))}
         >
           {open === "model" && (
-            <Dropdown align="right">
+            <Dropdown align="right" dropUp={dropUp}>
+              {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+              {!loading && models.length === 0 && (
+                <div className="px-2 py-3 text-xs text-muted-foreground">Aucun modèle configuré</div>
+              )}
               {models.map(m => (
-                <DropdownItem key={m.id} selected={currentModel === m.name}
+                <DropdownItem
+                  key={m.id}
+                  selected={currentModel === m.name}
                   onClick={() => { setCurrentModel(m.name); setOpen(null); }}
                   icon={<div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><Cpu className="w-4 h-4 text-blue-600" /></div>}
-                  title={m.name} sub={m.desc}
+                  title={m.name}
+                  sub={m.model_id ?? m.provider}
                 />
               ))}
             </Dropdown>
           )}
         </CompactPill>
+
         <CompactPill
           label={currentAgent}
           icon={<Sparkles className="w-3 h-3 text-indigo-600" />}
@@ -77,12 +102,19 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
           onClick={() => setOpen(o => (o === "agent" ? null : "agent"))}
         >
           {open === "agent" && (
-            <Dropdown align="right">
+            <Dropdown align="right" dropUp={dropUp}>
+              {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+              {!loading && agents.length === 0 && (
+                <div className="px-2 py-3 text-xs text-muted-foreground">Aucun agent configuré</div>
+              )}
               {agents.map(a => (
-                <DropdownItem key={a.id} selected={currentAgent === a.name}
+                <DropdownItem
+                  key={a.id}
+                  selected={currentAgent === a.name}
                   onClick={() => { setCurrentAgent(a.name); setOpen(null); }}
-                  icon={<div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center"><Sparkles className="w-4 h-4 text-indigo-600" /></div>}
-                  title={a.name} sub={a.desc}
+                  icon={<div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-lg">{a.icon ?? <Sparkles className="w-4 h-4 text-indigo-600" />}</div>}
+                  title={a.name}
+                  sub={a.description ?? ""}
                 />
               ))}
             </Dropdown>
@@ -100,7 +132,7 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
         value={activePartner?.name ?? "Aucun"}
         icon={
           activePartner ? (
-            <img src={partnerImages[activePartner.id]} alt={activePartner.name} className="w-full h-full object-cover" loading="lazy" />
+            <PartnerAvatar partner={activePartner} size="lg" />
           ) : (
             <Users className="w-5 h-5 text-violet-600" />
           )
@@ -115,27 +147,31 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
             <DropdownItem
               selected={!currentPartner}
               onClick={() => { setCurrentPartner(null); setOpen(null); }}
-              icon={<div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">—</div>}
+              icon={<div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-sm">—</div>}
               title="Aucun partenaire"
               sub="Mode libre"
             />
+            {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+            {!loading && partners.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground">Aucun partenaire configuré</div>
+            )}
             {partners.map(p => (
               <DropdownItem
                 key={p.id}
                 selected={currentPartner === p.id}
                 onClick={() => {
-                  setCurrentModel(p.model);
-                  setCurrentAgent(p.agent);
+                  if (p.model) setCurrentModel(p.model.name);
+                  if (p.agent) setCurrentAgent(p.agent.name);
                   setCurrentPartner(p.id);
                   setOpen(null);
                 }}
                 icon={
-                  <div className="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-border">
-                    <img src={partnerImages[p.id]} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                  <div className="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-border flex items-center justify-center bg-muted">
+                    <PartnerAvatar partner={p} size="md" />
                   </div>
                 }
                 title={p.name}
-                sub={p.expertise}
+                sub={p.description ?? ""}
               />
             ))}
           </Dropdown>
@@ -154,6 +190,10 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
       >
         {open === "model" && (
           <Dropdown>
+            {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+            {!loading && models.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground">Aucun modèle configuré</div>
+            )}
             {models.map(m => (
               <DropdownItem
                 key={m.id}
@@ -161,7 +201,7 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
                 onClick={() => { setCurrentModel(m.name); setOpen(null); }}
                 icon={<div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><Cpu className="w-4 h-4 text-blue-600" /></div>}
                 title={m.name}
-                sub={m.desc}
+                sub={m.model_id ?? m.provider}
               />
             ))}
           </Dropdown>
@@ -180,20 +220,36 @@ export function ModelAgentSelector({ compact = false }: { compact?: boolean }) {
       >
         {open === "agent" && (
           <Dropdown>
+            {loading && <div className="px-2 py-3 text-xs text-muted-foreground">Chargement…</div>}
+            {!loading && agents.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground">Aucun agent configuré</div>
+            )}
             {agents.map(a => (
               <DropdownItem
                 key={a.id}
                 selected={currentAgent === a.name}
                 onClick={() => { setCurrentAgent(a.name); setOpen(null); }}
-                icon={<div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center"><Sparkles className="w-4 h-4 text-indigo-600" /></div>}
+                icon={<div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-lg">{a.icon ?? <Sparkles className="w-4 h-4 text-indigo-600" />}</div>}
                 title={a.name}
-                sub={a.desc}
+                sub={a.description ?? ""}
               />
             ))}
           </Dropdown>
         )}
       </SelectorCard>
     </div>
+  );
+}
+
+function PartnerAvatar({ partner, size }: { partner: AIPartner; size: "sm" | "md" | "lg" }) {
+  const sizeClass = size === "sm" ? "text-[10px]" : size === "lg" ? "text-lg" : "text-sm";
+  if (partner.avatar_url) {
+    return <img src={partner.avatar_url} alt={partner.name} className="w-full h-full object-cover" />;
+  }
+  return (
+    <span className={`font-semibold text-violet-600 ${sizeClass}`}>
+      {partner.name.charAt(0).toUpperCase()}
+    </span>
   );
 }
 
@@ -244,9 +300,9 @@ function SelectorCard({
   );
 }
 
-function Dropdown({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+function Dropdown({ children, align = "left", dropUp = false }: { children: React.ReactNode; align?: "left" | "right"; dropUp?: boolean }) {
   return (
-    <div className={`dropdown-panel absolute top-full mt-2 z-50 max-h-80 overflow-y-auto min-w-[16rem] ${align === "right" ? "right-0" : "left-0 right-0"}`}>
+    <div className={`dropdown-panel absolute z-50 max-h-80 overflow-y-auto min-w-[16rem] ${dropUp ? "bottom-full mb-2" : "top-full mt-2"} ${align === "right" ? "right-0" : "left-0 right-0"}`}>
       {children}
     </div>
   );

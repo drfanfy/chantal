@@ -1,4 +1,5 @@
 import { useApp, type Conversation } from "@/lib/appContext";
+import { useAuth } from "@/lib/authContext";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { MessageSquare, PanelLeftClose, PanelLeft, Plus, Workflow } from "lucide-react";
 
@@ -28,7 +29,9 @@ function groupByDate(convs: Conversation[]) {
 
 export function ConversationSidebar() {
   const { conversations, activeConversationId, sidebarOpen, toggleSidebar, setActiveConversation } = useApp();
+  const { profile } = useAuth();
   const navigate = useNavigate();
+  const firstName = (profile?.full_name ?? profile?.email ?? "Moi").split(/\s+/)[0];
   const groups = groupByDate(conversations);
 
   if (!sidebarOpen) {
@@ -60,6 +63,9 @@ export function ConversationSidebar() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto py-2 px-2">
+        {groups.length === 0 && (
+          <div className="px-3 py-6 text-center text-xs text-muted-foreground">Aucune conversation</div>
+        )}
         {groups.map(g => (
           <div key={g.label} className="mb-3">
             <div className="px-2 py-1 text-[0.6875rem] font-medium text-muted-foreground uppercase tracking-wider">{g.label}</div>
@@ -75,14 +81,15 @@ export function ConversationSidebar() {
                   <MessageSquare className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[0.8125rem] font-medium text-foreground truncate">{c.title}</div>
-                  <div className="text-[0.6875rem] text-muted-foreground">{c.user}</div>
+                  <div className="text-[0.8125rem] font-medium text-foreground truncate leading-snug">{c.title}</div>
+                  <div className="text-[0.7rem] text-muted-foreground">{firstName}</div>
                 </div>
               </button>
             ))}
           </div>
         ))}
       </div>
+
     </div>
   );
 }
