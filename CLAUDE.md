@@ -2,66 +2,94 @@
 
 ## C'est quoi CHANTAL
 
-Portail IA interne de **QUARTUS**. Objectif : centraliser tous les usages IA de l'entreprise en un seul endroit.
+Portail IA interne de **QUARTUS** (groupe immobilier). Objectif : centraliser tous les usages IA de l'entreprise en un seul endroit.
 
-Actuellement en **POC** — l'objectif est de valider l'expérience utilisateur et convaincre la direction avant de connecter les vraies briques IA.
+Actuellement en **POC** — objectif : valider l'UX et convaincre la direction.
+
+Projet Supabase : `chtwyqanehlehvpruego`  
+Déployé sur Vercel. Dev local : `npm run dev`.
 
 ---
 
 ## Stack technique
 
-### Front
-- React 19
-- TypeScript (strict)
-- TanStack Router
-- Vite
-- Tailwind CSS
-- shadcn/ui
-
-### Back
-- Supabase (auth, BDD, RLS, Edge Functions)
-
-### Déploiement
-- Vercel
+- React 19 + TypeScript strict + TanStack Router + Vite + Tailwind CSS + shadcn/ui
+- Supabase (auth, BDD, RLS, Edge Functions, Storage)
+- Multi-LLM : **Groq** (llama3, défaut), **OpenAI** (gpt-4o-mini), **Google** (Gemini)
+- Déploiement : Vercel
 
 ---
 
-## Structure des routes
+## Routes
 
 | Route | Description | Statut |
 |---|---|---|
+| `/chat` | Chat IA multi-modèle avec historique Supabase | ✅ fonctionnel |
+| `/app` | Workspace (workflows, prompts, partenaires, formations, reporting, studio) | ✅ |
+| `/admin` | Back-office : utilisateurs, modèles IA, agents, partenaires | ✅ fonctionnel |
+| `/tickets` | Gestion des tickets support (admins) | ✅ fonctionnel |
 | `/home` | Dashboard accueil | ✅ |
-| `/chat` | Simulation assistant IA | ✅ (fictif) |
-| `/app` | Workspace principal | ✅ |
-| `/prompts` | Bibliothèque de prompts | ✅ |
-| `/workflows` | Catalogue de workflows IA | ✅ (fictif) |
-| `/formations` | Centre de ressources IA | ✅ |
-| `/partenaires` | Référentiel partenaires IA | ✅ (fictif) |
-| `/reporting` | Dashboard d'usage | ✅ (fictif) |
-| `/studio` | Studio IA (admins) | ✅ (fictif) |
-| `/admin` | Back-office utilisateurs | ✅ fonctionnel |
 
 ---
 
 ## Système de rôles
 
-| Rôle | Accès |
-|---|---|
-| `super_admin` | Tout |
-| `admin` | Tout (restrictions futures possibles) |
-| `beta_tester` | Accès utilisateur classique |
-| `viewer` | Lecture seule |
+`super_admin` > `admin` > `beta_tester` > `viewer`
 
-Routes protégées : `/admin`, `/reporting`, `/studio`
+Routes protégées par rôle : `/admin`, `/tickets`, `/studio`, `/reporting`
 
 ---
 
-## Authentification
+## Tables Supabase existantes
 
-- Email + mot de passe uniquement
-- Pas d'inscription publique — comptes créés par un admin
-- Edge Function Supabase pour : créer un utilisateur, attribuer un rôle, activer/désactiver
-- Flow : Login → Auth Supabase → Profil → Contrôle rôles → Menus autorisés
+| Table | Description |
+|---|---|
+| `profiles` | Utilisateurs (id, email, full_name, role, avatar_url, is_active) |
+| `ai_models` | Modèles IA configurables (name, provider, model_id, env_key, avatar_url, min_role) |
+| `agents` | Agents IA (name, slug, description, system_prompt, icon, avatar_url, min_role) |
+| `partners` | Partenaires IA (name, description, personality, system_prompt, avatar_url, ai_model_id, agent_id) |
+| `conversations` | Conversations chat (user_id, title, ai_model_id, agent_id, partner_id) |
+| `messages` | Messages (conversation_id, role, content, speaker_name, speaker_avatar_url, speaker_icon) |
+| `tickets` | Tickets support (user_id, type, title, description, status, priority) |
+| `ticket_messages` | Messages de tickets (ticket_id, user_id, content, is_read) |
+| `prompts` | Bibliothèque de prompts |
+| `workflows` | Catalogue de workflows |
+| `usage_logs` | Logs d'usage |
+
+---
+
+## Architecture chat
+
+Le chat est entièrement fonctionnel avec streaming token par token.
+
+**Router LLM** dans `ChatInterface.tsx` — route selon `ai_models.provider` :
+- `"groq"` → `src/lib/groq.ts` (VITE_GROQ_API_KEY)
+- `"openai"` → `src/lib/openai.ts` (VITE_OPENAI_API_KEY)
+- `"google"` → `src/lib/gemini.ts` (VITE_GEMINI_API_KEY)
+
+**Persistance** : conversations + messages sauvegardés en Supabase à chaque envoi. Chargés au montage de `ChatInterface`.
+
+**Speaker figé par message** : `speakerName`, `speakerAvatarUrl`, `speakerIcon` stockés dans chaque message au moment de l'envoi (pas mis à jour si on change de sélecteur).
+
+**Sélecteurs** : `SelectorPills` (partenaire/modèle/agent) dans la barre de saisie, à gauche du textarea. Hors du `chat-input-container` stylistiquement.
+
+---
+
+## Ce qui est fonctionnel
+
+✅ Auth complète (login, rôles, activation/désactivation)  
+✅ Chat multi-LLM avec streaming (Groq/OpenAI/Gemini)  
+✅ Persistance conversations Supabase  
+✅ Avatars figés par message  
+✅ Pièces jointes multiples (upload Supabase Storage bucket `chat-files`)  
+✅ Auto-titre GPT-4o-mini après premier échange  
+✅ Admin BO : cards + modales pour Modèles/Agents/Partenaires  
+✅ Génération avatar IA via Edge Function `generate-avatar` (HuggingFace FLUX)  
+✅ Upload avatar vers bucket `avatars`  
+✅ Page Partenaires branchée sur DB  
+✅ Formations : mode édition CMS + card créer (in-memory, non persisté)  
+✅ Tickets : FeedbackButton draggable (icône Bug), panel envoi, page /tickets admin, Realtime  
+✅ Navigation Tickets dans TopNav (admins)  
 
 ---
 
@@ -69,63 +97,50 @@ Routes protégées : `/admin`, `/reporting`, `/studio`
 
 - Reporting → données simulées
 - Workflows → exemples fictifs
-- Partenaires → fictifs
 - Studio IA → fictif
-- Chat → pas de vrai LLM connecté
 
 **Ne pas "corriger" ces données fictives sans instruction explicite.**
 
 ---
 
-## Ce qui est fonctionnel
+## Points en attente / bugs connus
 
-✅ Auth complète  
-✅ Gestion des rôles  
-✅ Navigation (TopNav + AppShell)  
-✅ Gestion utilisateurs (admin)  
-✅ Déploiement Vercel  
-
----
-
-## En cours
-
-🟡 Amélioration UI  
-🟡 Reporting plus crédible  
-🟡 Données réalistes  
-🟡 Expérience utilisateur  
+🔴 **Chat invisible** — à diagnostiquer à la prochaine session (lié aux dernières modifs)  
+🟡 Formations non persistées en DB (in-memory uniquement)  
+🟡 Génération avatar IA bloquée (HuggingFace nécessite crédits Inference Providers)  
+🟡 Tickets : noms d'auteurs affichés comme UUID tronqué (FK profiles manquante)
 
 ---
 
-## Vision long terme (ne pas implémenter sans validation)
+## Variables d'environnement (.env)
 
-🔵 Agents IA réels  
-🔵 Connecteurs métiers (CRM, M365)  
-🔵 Automatisations  
-🔵 Base documentaire IA  
-🔵 Recherche sémantique  
+```
+VITE_SUPABASE_URL=https://chtwyqanehlehvpruego.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
+VITE_GROQ_API_KEY=gsk_...         # Chat (défaut)
+VITE_OPENAI_API_KEY=sk-proj-...   # GPT-4o-mini (auto-titre)
+VITE_GEMINI_API_KEY=...           # Gemini (si modèle configuré)
+VITE_HF_TOKEN=hf_...              # HuggingFace (génération avatar)
+```
+
+---
+
+## Edge Functions Supabase déployées
+
+- `create-user` — création compte via admin (upsert profil, is_active: true)
+- `generate-avatar` — génération image via HuggingFace → upload Storage `avatars`
 
 ---
 
 ## Règles de développement
 
-### Architecture
-- Composants réutilisables
 - TypeScript strict — pas de `any`
-- Pages découplées
+- Composants définis **hors** des autres composants (évite remount/perte de focus)
 - Logique métier séparée de l'UI
-
-### Style UI
-- Moderne, sobre, premium
-- Inspiration : **Notion + Linear + ChatGPT**
-- Zéro fioriture inutile
-
-### UX
-- Simplicité avant tout
-- Rapidité perçue
-- Zéro formation utilisateur nécessaire
+- Style : Notion + Linear + ChatGPT — sobre, premium, zéro fioriture
 
 ---
 
 ## Objectif V1
 
-Disposer d'une plateforme suffisamment crédible pour être présentée à la **direction QUARTUS** comme le futur portail IA interne de l'entreprise.
+Plateforme crédible pour présentation direction QUARTUS comme futur portail IA interne.
