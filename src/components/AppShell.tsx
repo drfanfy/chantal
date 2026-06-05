@@ -14,7 +14,8 @@ async function handleSignOut() {
 }
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <header className="h-14 shrink-0 border-b border-border bg-surface/80 backdrop-blur flex items-center px-6 gap-6">
+      <header className="h-14 shrink-0 border-b border-border flex items-center px-6 gap-6 relative">
+        <div className="absolute inset-0 bg-surface/80 backdrop-blur -z-10 pointer-events-none" />
         <Link
           to="/home"
           className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
@@ -30,9 +31,13 @@ async function handleSignOut() {
         </div>
         <div className="shrink-0 flex items-center justify-end min-w-[220px]">
   <div className="flex items-center gap-3">
-    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand to-violet-500 flex items-center justify-center text-white text-sm font-semibold">
-      {profile?.full_name?.charAt(0) ?? "?"}
-    </div>
+    {profile?.avatar_url ? (
+      <img src={profile.avatar_url} alt={profile.full_name ?? "Avatar"} className="w-9 h-9 rounded-full object-cover shrink-0" />
+    ) : (
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand to-violet-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+        {profile?.full_name?.charAt(0) ?? "?"}
+      </div>
+    )}
 
     <div className="leading-tight">
       <div className="text-sm font-medium text-foreground">

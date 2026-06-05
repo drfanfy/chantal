@@ -103,12 +103,23 @@ Le chat est entièrement fonctionnel avec streaming token par token.
 
 ---
 
+## Tables Supabase existantes (suite)
+
+| Table | Description |
+|---|---|
+| `formations` | Formations (id TEXT PK, name, description, icon, intro, sort_order, is_custom) |
+| `formation_chapters` | Chapitres (id UUID PK, formation_id FK, title, content, sort_order) |
+
+Migrations à appliquer dans le dashboard Supabase :
+- `supabase/migrations/20240605_tickets_profiles_fk.sql` — FK tickets/ticket_messages → profiles
+- `supabase/migrations/20240605_formations.sql` — tables formations + formation_chapters + RLS
+
+---
+
 ## Points en attente / bugs connus
 
-🔴 **Chat invisible** — à diagnostiquer à la prochaine session (lié aux dernières modifs)  
-🟡 Formations non persistées en DB (in-memory uniquement)  
 🟡 Génération avatar IA bloquée (HuggingFace nécessite crédits Inference Providers)  
-🟡 Tickets : noms d'auteurs affichés comme UUID tronqué (FK profiles manquante)
+🟡 Migrations SQL à appliquer manuellement dans le dashboard Supabase (voir ci-dessus)
 
 ---
 

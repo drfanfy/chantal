@@ -133,16 +133,37 @@ function UsersSection() {
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("create-user", {
-        body: { email: createForm.email, password: createForm.password, full_name: createForm.full_name, role: createForm.role },
-      });
-      if (error) { alert(`Erreur : ${error.message}`); return; }
-      if (data?.error) { alert(`Erreur : ${data.error}`); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/create-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token ?? ""}`,
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          },
+          body: JSON.stringify({
+            email:     createForm.email,
+            password:  createForm.password,
+            full_name: createForm.full_name,
+            role:      createForm.role,
+          }),
+        }
+      );
+      const json = await res.json() as { error?: string; success?: boolean };
+      if (!res.ok || json.error) {
+        alert(`Erreur : ${json.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
       setCreateForm(USER_CREATE_INIT);
       setShowCreate(false);
       await fetchProfiles();
-    } catch { alert("Erreur inattendue."); }
-    finally { setSaving(false); }
+    } catch (e) {
+      alert(`Erreur : ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateUser() {

@@ -5,7 +5,7 @@ export interface GroqMessage {
 
 export async function* streamGroq(
   messages: GroqMessage[],
-  modelId = "llama3-8b-8192"
+  modelId = "llama-3.1-8b-instant"
 ): AsyncGenerator<string> {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
   if (!apiKey) throw new Error("VITE_GROQ_API_KEY n'est pas défini");

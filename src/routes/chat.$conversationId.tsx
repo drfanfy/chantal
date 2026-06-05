@@ -4,7 +4,8 @@ import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { ChatInterface } from "@/components/ChatInterface";
 import { WorkflowView } from "@/components/WorkflowView";
 import { useApp } from "@/lib/appContext";
-import { useEffect } from "react";
+import { useAuth } from "@/lib/authContext";
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/chat/$conversationId")({
@@ -25,8 +26,18 @@ export const Route = createFileRoute("/chat/$conversationId")({
 
 function ChatPage() {
   const { conversationId } = Route.useParams();
-  const { conversations, conversationsLoaded, setActiveConversation, activeConversationId } = useApp();
+  const { conversations, conversationsLoaded, setActiveConversation, activeConversationId, loadConversationsFromDB } = useApp();
+  const { profile } = useAuth();
   const navigate = useNavigate();
+  const hasTriggeredLoad = useRef(false);
+
+  // Déclenche le chargement si on arrive directement par URL (refresh)
+  useEffect(() => {
+    if (profile?.id && !conversationsLoaded && !hasTriggeredLoad.current) {
+      hasTriggeredLoad.current = true;
+      void loadConversationsFromDB(profile.id, profile.role === "super_admin");
+    }
+  }, [profile?.id, conversationsLoaded, loadConversationsFromDB]);
 
   const conv = conversations.find(c => c.id === conversationId);
 

@@ -1,17 +1,35 @@
-import { useState } from "react";
-import { formations } from "@/lib/data";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { formations as STATIC_FORMATIONS } from "@/lib/data";
 import { useApp } from "@/lib/appContext";
 import { useAuth } from "@/lib/authContext";
+import { supabase } from "@/lib/supabase";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   ArrowLeft, Clock, BookOpen, CheckCircle, GraduationCap,
-  ArrowRight, Pencil, Plus, X, Save, ChevronDown, ChevronUp, Trash2,
+  ArrowRight, Pencil, Plus, X, Save, ChevronDown, ChevronUp, Trash2, Loader2, Sparkles,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-type Chapter  = { title: string; content: string };
-type Formation = { id: string; name: string; desc: string; icon: string; chapters: Chapter[]; intro: string; isCustom?: boolean };
+function isHtml(s: string) { return /<[a-z][\s\S]*>/i.test(s); }
 
-const defaultContent: Record<string, { intro: string; chapters: Chapter[] }> = {
+function calcReadTime(chapters: Chapter[]): number {
+  const words = chapters.reduce((acc, ch) => {
+    const text = ch.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return acc + text.split(" ").filter(Boolean).length;
+  }, 0);
+  return Math.max(1, Math.round(words / 200));
+}
+
+function ChapterContent({ content }: { content: string }) {
+  if (isHtml(content)) {
+    return <div className="pl-9 formation-prose" dangerouslySetInnerHTML={{ __html: content }} />;
+  }
+  return <div className="pl-9 text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{content}</div>;
+}
+
+// ─── Contenu par défaut (seed initial) ───────────────────────────────────────
+
+const DEFAULT_CONTENT: Record<string, { intro: string; chapters: { title: string; content: string }[] }> = {
   "prompt-engineering": {
     intro: "Le prompt engineering est la discipline qui consiste à formuler des instructions claires et efficaces pour obtenir le meilleur des modèles d'IA.",
     chapters: [
@@ -64,57 +82,235 @@ const defaultContent: Record<string, { intro: string; chapters: Chapter[] }> = {
   },
 };
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Chapter  = { id?: string; title: string; content: string };
+type Formation = {
+  id: string; name: string; description: string; icon: string;
+  intro: string; chapters: Chapter[]; is_custom?: boolean;
+};
+type EditState = { name: string; description: string; icon: string; intro: string; chapters: Chapter[] };
+
+interface DbChapter {
+  id: string; formation_id: string; title: string; content: string; sort_order: number;
+}
+interface DbFormation {
+  id: string; name: string; description: string; icon: string;
+  intro: string; sort_order: number; is_custom: boolean;
+  formation_chapters: DbChapter[];
+}
+
+// ─── Composant ────────────────────────────────────────────────────────────────
+
 export function FormationView() {
   const { activeFormation, setActiveFormation, setViewMode } = useApp();
   const { profile } = useAuth();
   const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 
-  const [customFormations, setCustomFormations] = useState<Formation[]>([]);
-  const [editedContent, setEditedContent] = useState<Record<string, { name: string; desc: string; icon: string; intro: string; chapters: Chapter[] }>>({});
-  const [editMode, setEditMode] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newForm, setNewForm] = useState<Omit<Formation,"id">>({ name:"", desc:"", icon:"📚", intro:"", chapters:[{title:"",content:""}] });
-  const [expandedChapters, setExpandedChapters] = useState<Record<string,boolean>>({});
+  const [formations, setFormations]           = useState<Formation[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [saving, setSaving]                   = useState(false);
+  const [editMode, setEditMode]               = useState(false);
+  const [editedContent, setEditedContent]     = useState<Record<string, EditState>>({});
+  const [showCreate, setShowCreate]           = useState(false);
+  const [newForm, setNewForm]                 = useState<Omit<EditState, "id">>({
+    name: "", description: "", icon: "📚", intro: "", chapters: [{ title: "", content: "" }],
+  });
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+  const [progress, setProgress] = useState<Set<string>>(new Set());
+  const seededRef    = useRef(false);
+  const progressRef  = useRef(progress);
+  useEffect(() => { progressRef.current = progress; }, [progress]);
 
-  const allFormations: Formation[] = [
-    ...formations.map(f => ({
+  // ── Chargement depuis Supabase ─────────────────────────────────────────────
+  async function loadFormations(): Promise<Formation[]> {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("formations")
+      .select("*, formation_chapters(id, title, content, sort_order)")
+      .order("sort_order", { ascending: true });
+
+    if (error || !data) { setLoading(false); return []; }
+
+    const mapped = (data as DbFormation[]).map(f => ({
       id: f.id,
-      name:     editedContent[f.id]?.name     ?? f.name,
-      desc:     editedContent[f.id]?.desc     ?? f.desc,
-      icon:     editedContent[f.id]?.icon     ?? f.icon,
-      intro:    editedContent[f.id]?.intro    ?? (defaultContent[f.id]?.intro    ?? ""),
-      chapters: editedContent[f.id]?.chapters ?? (defaultContent[f.id]?.chapters ?? []),
-    })),
-    ...customFormations,
-  ];
+      name: f.name,
+      description: f.description,
+      icon: f.icon,
+      intro: f.intro,
+      is_custom: f.is_custom,
+      chapters: (f.formation_chapters ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(c => ({ id: c.id, title: c.title, content: c.content })),
+    }));
+    setFormations(mapped);
+    setLoading(false);
+    return mapped;
+  }
 
-  const formation = allFormations.find(f => f.id === activeFormation);
+  // ── Seeding initial (admin, table vide) ────────────────────────────────────
+  async function seedDefaultFormations() {
+    for (let i = 0; i < STATIC_FORMATIONS.length; i++) {
+      const f = STATIC_FORMATIONS[i];
+      const content = DEFAULT_CONTENT[f.id];
+      if (!content) continue;
+      const { error } = await supabase.from("formations").insert({
+        id: f.id, name: f.name, description: f.desc,
+        icon: f.icon, intro: content.intro, sort_order: i, is_custom: false,
+      });
+      if (!error && content.chapters.length > 0) {
+        await supabase.from("formation_chapters").insert(
+          content.chapters.map((ch, j) => ({
+            formation_id: f.id, title: ch.title, content: ch.content, sort_order: j,
+          }))
+        );
+      }
+    }
+    await loadFormations();
+  }
+
+  useEffect(() => {
+    void (async () => {
+      const loaded = await loadFormations();
+      if (loaded.length === 0 && isAdmin && !seededRef.current) {
+        seededRef.current = true;
+        await seedDefaultFormations();
+      }
+    })();
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Chargement progression lecture ────────────────────────────────────────
+  useEffect(() => {
+    if (!profile?.id) return;
+    supabase.from("formation_progress").select("chapter_id")
+      .then(({ data, error }) => {
+        if (!error) setProgress(new Set((data ?? []).map(r => r.chapter_id as string)));
+      });
+  }, [profile?.id]);
+
+  const markChapterRead = useCallback(async (chapterId: string) => {
+    if (!profile?.id || progressRef.current.has(chapterId)) return;
+    setProgress(prev => new Set([...prev, chapterId]));
+    await supabase.from("formation_progress")
+      .upsert({ user_id: profile.id, chapter_id: chapterId }, { onConflict: "user_id,chapter_id" });
+  }, [profile?.id]);
+
+  // ── Intersection Observer — marque lu quand visible ───────────────────────
+  useEffect(() => {
+    if (!activeFormation || !profile?.id) return;
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = (entry.target as HTMLElement).dataset.chapterId;
+          if (id) void markChapterRead(id);
+        }
+      });
+    }, { threshold: 0.6 });
+    const timer = setTimeout(() => {
+      document.querySelectorAll("[data-chapter-id]").forEach(el => observer.observe(el));
+    }, 150);
+    return () => { observer.disconnect(); clearTimeout(timer); };
+  }, [activeFormation, profile?.id, markChapterRead]);
+
+  // ── Sauvegarde d'une formation éditée ─────────────────────────────────────
+  async function saveFormation(id: string) {
+    const cur = editedContent[id];
+    if (!cur) return;
+    setSaving(true);
+
+    await supabase.from("formations").update({
+      name: cur.name, description: cur.description,
+      icon: cur.icon, intro: cur.intro,
+      updated_at: new Date().toISOString(),
+    }).eq("id", id);
+
+    await supabase.from("formation_chapters").delete().eq("formation_id", id);
+    if (cur.chapters.length > 0) {
+      await supabase.from("formation_chapters").insert(
+        cur.chapters.map((ch, i) => ({
+          formation_id: id, title: ch.title, content: ch.content, sort_order: i,
+        }))
+      );
+    }
+
+    setEditedContent(prev => { const { [id]: _removed, ...rest } = prev; return rest; });
+    setEditMode(false);
+    setSaving(false);
+    await loadFormations();
+  }
+
+  // ── Création d'une formation ───────────────────────────────────────────────
+  async function createFormation() {
+    if (!newForm.name.trim()) { alert("Le titre est obligatoire."); return; }
+    const id = `custom-${Date.now()}`;
+    await supabase.from("formations").insert({
+      id, name: newForm.name, description: newForm.description,
+      icon: newForm.icon, intro: newForm.intro,
+      sort_order: formations.length, is_custom: true,
+    });
+    if (newForm.chapters.length > 0) {
+      await supabase.from("formation_chapters").insert(
+        newForm.chapters.map((ch, i) => ({
+          formation_id: id, title: ch.title, content: ch.content, sort_order: i,
+        }))
+      );
+    }
+    setNewForm({ name: "", description: "", icon: "📚", intro: "", chapters: [{ title: "", content: "" }] });
+    setShowCreate(false);
+    await loadFormations();
+  }
+
+  const formation = formations.find(f => f.id === activeFormation);
+
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   // ── Vue lecture / édition d'une formation ─────────────────────────────────
   if (formation && activeFormation) {
-    const cur = editedContent[activeFormation] ?? { name: formation.name, desc: formation.desc, icon: formation.icon, intro: formation.intro, chapters: formation.chapters };
+    const cur: EditState = editedContent[activeFormation] ?? {
+      name: formation.name, description: formation.description,
+      icon: formation.icon, intro: formation.intro, chapters: formation.chapters,
+    };
 
-    const set = (field: keyof typeof cur, val: unknown) =>
+    const set = (field: keyof EditState, val: EditState[keyof EditState]) =>
       setEditedContent(prev => ({ ...prev, [activeFormation]: { ...cur, [field]: val } }));
 
     const updChapter = (i: number, field: keyof Chapter, val: string) => {
       const c = [...cur.chapters]; c[i] = { ...c[i], [field]: val }; set("chapters", c);
     };
 
+    const isDirty = !!editedContent[activeFormation];
+
     return (
       <div className="h-full overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between mb-6">
-            <button onClick={() => { setActiveFormation(null); setViewMode("formation"); }}
+            <button
+              onClick={() => { setActiveFormation(null); setViewMode("formation"); setEditMode(false); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" /> Retour
             </button>
             {isAdmin && (
-              <button onClick={() => setEditMode(m => !m)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand" : "border border-border text-muted-foreground hover:bg-muted"}`}>
-                <Pencil className="w-3.5 h-3.5" />
-                {editMode ? "Mode édition actif" : "Mode édition"}
-              </button>
+              <div className="flex items-center gap-2">
+                {editMode && isDirty && (
+                  <button onClick={() => void saveFormation(activeFormation)} disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand/90 disabled:opacity-60 transition-colors">
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Sauvegarder
+                  </button>
+                )}
+                <button onClick={() => setEditMode(m => !m)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand" : "border border-border text-muted-foreground hover:bg-muted"}`}>
+                  <Pencil className="w-3.5 h-3.5" />
+                  {editMode ? "Mode édition actif" : "Mode édition"}
+                </button>
+              </div>
             )}
           </div>
 
@@ -125,16 +321,16 @@ export function FormationView() {
                 <input value={cur.icon} onChange={e => set("icon", e.target.value)} className="w-14 rounded-lg border border-border bg-background px-2 py-2 text-2xl text-center" />
                 <input value={cur.name} onChange={e => set("name", e.target.value)} placeholder="Titre *" className="flex-1 rounded-lg border border-brand/40 bg-background px-3 py-2 text-xl font-bold outline-none" />
               </div>
-              <textarea value={cur.desc} onChange={e => set("desc", e.target.value)} placeholder="Description" rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none" />
+              <textarea value={cur.description} onChange={e => set("description", e.target.value)} placeholder="Description" rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none" />
               <textarea value={cur.intro} onChange={e => set("intro", e.target.value)} placeholder="Introduction" rows={3} className="w-full rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-sm outline-none resize-none" />
             </div>
           ) : (
             <div className="mb-8">
               <span className="text-3xl mb-3 block">{cur.icon}</span>
               <h1 className="text-2xl font-bold tracking-tight mb-2">{cur.name}</h1>
-              <p className="text-muted-foreground text-sm mb-4">{cur.desc}</p>
+              <p className="text-muted-foreground text-sm mb-4">{cur.description}</p>
               <div className="flex items-center gap-4 text-xs text-muted-foreground mb-6">
-                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> ~{cur.chapters.length * 6} min</span>
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> ~{calcReadTime(cur.chapters)} min</span>
                 <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> {cur.chapters.length} chapitres</span>
               </div>
               {cur.intro && <div className="p-5 rounded-xl bg-brand/5 border border-brand/10"><p className="text-sm text-foreground/90 leading-relaxed">{cur.intro}</p></div>}
@@ -148,31 +344,42 @@ export function FormationView() {
                 {editMode ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-semibold shrink-0">{i+1}</span>
-                      <input value={ch.title} onChange={e => updChapter(i,"title",e.target.value)} placeholder="Titre du chapitre" className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none" />
+                      <span className="w-6 h-6 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-semibold shrink-0">{i + 1}</span>
+                      <input value={ch.title} onChange={e => updChapter(i, "title", e.target.value)} placeholder="Titre du chapitre" className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none" />
                       <button onClick={() => setExpandedChapters(p => ({ ...p, [i]: !p[i] }))} className="p-1 text-muted-foreground hover:text-foreground">
                         {expandedChapters[i] === false ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => set("chapters", cur.chapters.filter((_,j)=>j!==i))} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => set("chapters", cur.chapters.filter((_, j) => j !== i))} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                     {expandedChapters[i] !== false && (
-                      <textarea value={ch.content} onChange={e => updChapter(i,"content",e.target.value)} placeholder="Contenu (texte, listes avec •…)" rows={6} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground outline-none resize-y leading-relaxed font-mono" />
+                      <RichTextEditor
+                        key={`${activeFormation}-${i}`}
+                        content={ch.content}
+                        onChange={val => updChapter(i, "content", val)}
+
+                      />
                     )}
                   </div>
                 ) : (
-                  <>
+                  <div data-chapter-id={ch.id}>
                     <div className="flex items-start gap-3 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5">{i+1}</div>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5 transition-colors ${ch.id && progress.has(ch.id) ? "bg-success/15 text-success" : "bg-brand/10 text-brand"}`}>
+                        {ch.id && progress.has(ch.id) ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
+                      </div>
                       <h2 className="text-base font-semibold">{ch.title}</h2>
                     </div>
-                    <div className="pl-9 text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{ch.content}</div>
-                    {i < cur.chapters.length-1 && <div className="pl-9 mt-4 flex items-center gap-1.5 text-xs text-success"><CheckCircle className="w-3.5 h-3.5" /> Chapitre complété</div>}
-                  </>
+                    <ChapterContent content={ch.content} />
+                    {ch.id && progress.has(ch.id) && (
+                      <div className="pl-9 mt-4 flex items-center gap-1.5 text-xs text-success">
+                        <CheckCircle className="w-3.5 h-3.5" /> Chapitre complété
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
             {editMode && (
-              <button onClick={() => set("chapters", [...cur.chapters, {title:"",content:""}])}
+              <button onClick={() => set("chapters", [...cur.chapters, { title: "", content: "" }])}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-brand/30 text-sm text-brand/70 hover:text-brand hover:border-brand/50 transition-colors">
                 <Plus className="w-4 h-4" /> Ajouter un chapitre
               </button>
@@ -203,26 +410,58 @@ export function FormationView() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allFormations.map((f, i) => (
-              <motion.button key={f.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: i * 0.04 }}
-                onClick={() => setActiveFormation(f.id)}
-                className="text-left bg-card border border-border rounded-2xl p-5 hover:shadow-elevated hover:border-brand/30 transition-all group">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand/15 to-violet-500/10 ring-1 ring-brand/20 flex items-center justify-center text-2xl">{f.icon}</div>
-                  <span className="text-[0.65rem] text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> ~{f.chapters.length * 6} min</span>
-                </div>
-                <h3 className="text-base font-semibold mb-1">{f.name}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{f.desc}</p>
-                <div className="flex items-center justify-between pt-3 border-t border-border">
-                  <span className="text-[0.7rem] text-muted-foreground flex items-center gap-1"><BookOpen className="w-3 h-3" /> {f.chapters.length} chapitres</span>
-                  <span className="text-xs font-medium text-brand flex items-center gap-1 group-hover:gap-2 transition-all">Démarrer <ArrowRight className="w-3 h-3" /></span>
-                </div>
-              </motion.button>
-            ))}
+            {formations.map((f, i) => {
+              const completed = f.chapters.filter(c => c.id && progress.has(c.id)).length;
+              const total     = f.chapters.length;
+              const isNew     = completed === 0;
+              const isDone    = completed === total && total > 0;
+              const readTime  = calcReadTime(f.chapters);
+              return (
+                <motion.button key={f.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: i * 0.04 }}
+                  onClick={() => setActiveFormation(f.id)}
+                  className="text-left bg-card border border-border rounded-2xl p-5 hover:shadow-elevated hover:border-brand/30 transition-all group">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand/15 to-violet-500/10 ring-1 ring-brand/20 flex items-center justify-center text-2xl">{f.icon}</div>
+                    <div className="flex items-center gap-1.5">
+                      {isNew && (
+                        <span className="inline-flex items-center gap-0.5 text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+                          <Sparkles className="w-2.5 h-2.5" /> Nouveau
+                        </span>
+                      )}
+                      {isDone && (
+                        <span className="inline-flex items-center gap-0.5 text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success">
+                          <CheckCircle className="w-2.5 h-2.5" /> Terminé
+                        </span>
+                      )}
+                      <span className="text-[0.65rem] text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> ~{readTime} min</span>
+                    </div>
+                  </div>
+                  <h3 className="text-base font-semibold mb-1">{f.name}</h3>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{f.description}</p>
+                  {!isNew && !isDone && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground mb-1">
+                        <span>{completed}/{total} chapitres</span>
+                        <span>{Math.round(completed / total * 100)}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${completed / total * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                    <span className="text-[0.7rem] text-muted-foreground flex items-center gap-1"><BookOpen className="w-3 h-3" /> {total} chapitres</span>
+                    <span className="text-xs font-medium text-brand flex items-center gap-1 group-hover:gap-2 transition-all">
+                      {isDone ? "Revoir" : isNew ? "Commencer" : "Continuer"} <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </motion.button>
+              );
+            })}
 
             {/* Card Créer */}
             {isAdmin && (
-              <motion.button initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: allFormations.length * 0.04 }}
+              <motion.button initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: formations.length * 0.04 }}
                 onClick={() => setShowCreate(true)}
                 className="text-left bg-card border border-dashed border-brand/30 rounded-2xl p-5 hover:border-brand hover:bg-brand/5 transition-all flex flex-col items-center justify-center gap-3 min-h-[180px]">
                 <div className="w-11 h-11 rounded-xl bg-brand/10 flex items-center justify-center"><Plus className="w-5 h-5 text-brand" /></div>
@@ -247,37 +486,38 @@ export function FormationView() {
             </div>
             <div className="p-5 space-y-3">
               <div className="flex gap-2">
-                <input value={newForm.icon} onChange={e => setNewForm(p=>({...p,icon:e.target.value}))} className="w-14 rounded-lg border border-border bg-background px-2 py-2 text-2xl text-center" />
-                <input value={newForm.name} onChange={e => setNewForm(p=>({...p,name:e.target.value}))} placeholder="Titre *" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand/40" />
+                <input value={newForm.icon} onChange={e => setNewForm(p => ({ ...p, icon: e.target.value }))} className="w-14 rounded-lg border border-border bg-background px-2 py-2 text-2xl text-center" />
+                <input value={newForm.name} onChange={e => setNewForm(p => ({ ...p, name: e.target.value }))} placeholder="Titre *" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand/40" />
               </div>
-              <textarea value={newForm.desc} onChange={e => setNewForm(p=>({...p,desc:e.target.value}))} placeholder="Description courte" rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none focus:border-brand/40" />
-              <textarea value={newForm.intro} onChange={e => setNewForm(p=>({...p,intro:e.target.value}))} placeholder="Introduction (optionnel)" rows={3} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none focus:border-brand/40" />
+              <textarea value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} placeholder="Description courte" rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none focus:border-brand/40" />
+              <textarea value={newForm.intro} onChange={e => setNewForm(p => ({ ...p, intro: e.target.value }))} placeholder="Introduction (optionnel)" rows={3} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none resize-none focus:border-brand/40" />
 
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground font-medium">Chapitres</p>
                 {newForm.chapters.map((ch, i) => (
                   <div key={i} className="flex gap-2 items-start">
-                    <span className="w-5 h-5 rounded-full bg-brand/10 text-brand text-[0.65rem] font-bold flex items-center justify-center shrink-0 mt-2">{i+1}</span>
+                    <span className="w-5 h-5 rounded-full bg-brand/10 text-brand text-[0.65rem] font-bold flex items-center justify-center shrink-0 mt-2">{i + 1}</span>
                     <div className="flex-1 space-y-1">
-                      <input value={ch.title} onChange={e => { const c=[...newForm.chapters]; c[i]={...c[i],title:e.target.value}; setNewForm(p=>({...p,chapters:c})); }} placeholder="Titre *" className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-brand/40" />
-                      <textarea value={ch.content} onChange={e => { const c=[...newForm.chapters]; c[i]={...c[i],content:e.target.value}; setNewForm(p=>({...p,chapters:c})); }} placeholder="Contenu" rows={3} className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none resize-none focus:border-brand/40" />
+                      <input value={ch.title} onChange={e => { const c = [...newForm.chapters]; c[i] = { ...c[i], title: e.target.value }; setNewForm(p => ({ ...p, chapters: c })); }} placeholder="Titre *" className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-brand/40" />
+                      <RichTextEditor
+                        key={`new-${i}`}
+                        content={ch.content}
+                        onChange={val => { const c = [...newForm.chapters]; c[i] = { ...c[i], content: val }; setNewForm(p => ({ ...p, chapters: c })); }}
+
+                      />
                     </div>
-                    <button onClick={() => setNewForm(p=>({...p,chapters:p.chapters.filter((_,j)=>j!==i)}))} className="mt-2 p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setNewForm(p => ({ ...p, chapters: p.chapters.filter((_, j) => j !== i) }))} className="mt-2 p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
-                <button onClick={() => setNewForm(p=>({...p,chapters:[...p.chapters,{title:"",content:""}]}))}
+                <button onClick={() => setNewForm(p => ({ ...p, chapters: [...p.chapters, { title: "", content: "" }] }))}
                   className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-brand/40 transition-colors">
                   <Plus className="w-3.5 h-3.5" /> Ajouter un chapitre
                 </button>
               </div>
 
               <div className="flex gap-2 pt-1">
-                <button onClick={() => {
-                  if (!newForm.name.trim()) { alert("Le titre est obligatoire."); return; }
-                  setCustomFormations(p => [...p, { ...newForm, id: `custom-${Date.now()}` }]);
-                  setNewForm({ name:"", desc:"", icon:"📚", intro:"", chapters:[{title:"",content:""}] });
-                  setShowCreate(false);
-                }} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                <button onClick={() => void createFormation()}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                   <Save className="w-3.5 h-3.5" /> Créer
                 </button>
                 <button onClick={() => setShowCreate(false)} className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted">Annuler</button>

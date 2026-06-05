@@ -47,13 +47,13 @@ export function PartnersView() {
             {partners.map((p, i) => {
               const fav = isFavorite({ kind: "partner", id: p.id });
               return (
-                <motion.button
+                <motion.div
                   key={p.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: i * 0.04 }}
                   onClick={() => handleSelect(p.id, p.model?.name, p.agent?.name)}
-                  className="group text-left relative bg-card border border-border rounded-2xl p-5 hover:shadow-elevated hover:border-brand/30 transition-all overflow-hidden"
+                  className="group text-left relative bg-card border border-border rounded-2xl p-5 hover:shadow-elevated hover:border-brand/30 transition-all overflow-hidden cursor-pointer"
                 >
                   {/* Favori */}
                   <button
@@ -103,7 +103,7 @@ export function PartnersView() {
                     <span>Travailler avec {p.name}</span>
                     <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                   </div>
-                </motion.button>
+                </motion.div>
               );
             })}
           </div>

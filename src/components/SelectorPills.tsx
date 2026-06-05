@@ -126,7 +126,7 @@ function Pill({ label, active, onClick, icon, children }: {
         }`}
       >
         <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0">{icon}</span>
-        <span className="max-w-[4.5rem] truncate">{label}</span>
+        <span>{label}</span>
         <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${active ? "rotate-180" : ""}`} />
       </button>
       {children}
@@ -136,7 +136,7 @@ function Pill({ label, active, onClick, icon, children }: {
 
 function PillDropdown({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute bottom-full mb-2 left-0 z-50 min-w-[11rem] max-h-64 overflow-y-auto bg-card border border-border rounded-xl shadow-elevated py-1">
+    <div className="absolute bottom-full mb-2 left-0 z-50 min-w-[11rem] bg-card border border-border rounded-xl shadow-elevated py-1">
       {children}
     </div>
   );

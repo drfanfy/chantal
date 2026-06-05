@@ -131,7 +131,7 @@ export function ChatInterface() {
   useEffect(() => {
     if (profile?.id && !hasLoadedFromDB.current) {
       hasLoadedFromDB.current = true;
-      void loadConversationsFromDB(profile.id);
+      void loadConversationsFromDB(profile.id, profile.role === "super_admin");
     }
   }, [profile?.id, loadConversationsFromDB]);
 
@@ -208,7 +208,6 @@ export function ChatInterface() {
           id: targetConvId, user_id: profile.id,
           title: content.slice(0, 40) || "Nouvelle conversation",
         });
-        console.log("[DB] Conversation:", convErr ? `❌ ${convErr.message}` : "✅");
       }
     }
 
@@ -223,9 +222,8 @@ export function ChatInterface() {
     addMessage({ role: "user", content, files: fileAttachments.length ? fileAttachments : undefined });
 
     const { error: uErr } = await supabase.from("messages").insert({ conversation_id: targetConvId, role: "user", content });
-    console.log("[DB] Message user:", uErr ? `❌ ${uErr.message}` : "✅");
 
-    const modelId = activeDbModel?.model_id ?? "llama3-8b-8192";
+    const modelId = activeDbModel?.model_id ?? "llama-3.1-8b-instant";
     const provider = activeDbModel?.provider ?? "groq";
     const hardcodedPrompt = AGENT_PROMPTS[currentAgent] ?? "";
     const hardcodedInstruction = hardcodedPrompt ? `${CHANTAL_BASE}\n\n${hardcodedPrompt}` : CHANTAL_BASE;
@@ -266,7 +264,6 @@ export function ChatInterface() {
         speaker_avatar_url: speakerAvatarUrlAtSend ?? null,
         speaker_icon: speakerIconAtSend ?? null,
       });
-      console.log("[DB] Message assistant:", aErr ? `❌ ${aErr.message}` : "✅");
 
       // Générer un titre IA après le premier échange (conversation nouvellement créée)
       if (!activeConversationId) {
@@ -283,8 +280,31 @@ export function ChatInterface() {
           }
         }
       }
-    } catch {
-      addMessage({ role: "assistant", content: "Une erreur est survenue. Vérifiez votre connexion ou la clé API." });
+    } catch (err) {
+      console.error("[Chat] Erreur stream:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const userMsg =
+        msg.includes("401") || msg.includes("403")
+          ? "Clé API invalide ou expirée. Vérifiez VITE_GROQ_API_KEY dans votre .env."
+          : msg.includes("404") || msg.toLowerCase().includes("model")
+          ? "Modèle introuvable ou déprécié. Mettez à jour le model_id dans Admin → Modèles IA (ex : llama-3.1-8b-instant)."
+          : msg.includes("429")
+          ? "Limite de débit Groq atteinte. Réessayez dans quelques secondes."
+          : `Une erreur est survenue : ${msg}`;
+      addMessage({
+        role: "assistant", content: userMsg,
+        speakerName:      speakerNameAtSend,
+        speakerAvatarUrl: speakerAvatarUrlAtSend,
+        speakerIcon:      speakerIconAtSend,
+      });
+      if (targetConvId) {
+        void supabase.from("messages").insert({
+          conversation_id: targetConvId, role: "assistant", content: userMsg,
+          speaker_name:       speakerNameAtSend,
+          speaker_avatar_url: speakerAvatarUrlAtSend ?? null,
+          speaker_icon:       speakerIconAtSend ?? null,
+        });
+      }
     } finally {
       setStreamingContent(null); setIsStreaming(false); setIsTyping(false);
     }

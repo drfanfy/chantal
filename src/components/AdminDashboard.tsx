@@ -98,7 +98,7 @@ export function AdminDashboard() {
           <div className="col-span-2 bg-surface border border-border rounded-xl p-5">
             <h3 className="text-sm font-semibold mb-4">Utilisation par modèle</h3>
             <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={192}>
                 <BarChart data={modelUsage} barSize={32}>
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -223,7 +223,7 @@ export function AdminDashboard() {
               <TrendingUp className="w-4 h-4 text-brand" /> Adoption (6 mois)
             </h3>
             <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={192}>
                 <AreaChart data={adoptionData}>
                   <defs>
                     <linearGradient id="colorInteractions" x1="0" y1="0" x2="0" y2="1">

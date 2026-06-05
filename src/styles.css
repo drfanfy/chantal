@@ -276,3 +276,37 @@
     border-color: oklch(0.45 0.18 265 / 0.2);
   }
 }
+
+  /* ─── TipTap editor (formation chapters) ──────────────────────────────────── */
+  .formation-editor .ProseMirror {
+    outline: none;
+    min-height: 120px;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--color-muted-foreground);
+    font-family: var(--font-mono);
+  }
+  .formation-editor .ProseMirror > * + * { margin-top: 0.5em; }
+  .formation-editor .ProseMirror p { margin: 0; }
+  .formation-editor .ProseMirror strong { font-weight: 700; color: var(--color-foreground); }
+  .formation-editor .ProseMirror em { font-style: italic; }
+  .formation-editor .ProseMirror s { text-decoration: line-through; }
+  .formation-editor .ProseMirror img {
+    max-width: 100%; border-radius: 0.5rem; margin: 0.5em 0; display: block;
+    cursor: default; outline: 2px solid transparent;
+  }
+  .formation-editor .ProseMirror img.ProseMirror-selectednode {
+    outline: 2px solid oklch(0.45 0.18 265 / 0.5);
+  }
+
+  /* ─── Formation prose (read mode HTML) ────────────────────────────────────── */
+  .formation-prose { font-size: 0.875rem; color: var(--color-muted-foreground); line-height: 1.75; }
+  .formation-prose > * + * { margin-top: 0.6em; }
+  .formation-prose p { margin: 0; }
+  .formation-prose strong { font-weight: 600; color: var(--color-foreground); }
+  .formation-prose em { font-style: italic; }
+  .formation-prose s { text-decoration: line-through; }
+  .formation-prose img {
+    max-width: 100%; border-radius: 0.75rem; margin: 1em 0; display: block;
+    box-shadow: 0 1px 4px 0 rgb(0 0 0 / .08);
+  }

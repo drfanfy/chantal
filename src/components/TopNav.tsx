@@ -33,9 +33,7 @@ export function TopNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [promptsOpen, setPromptsOpen] = useState(false);
-  useEffect(() => {
-    getCurrentUser();
-  }, []);
+  useEffect(() => { getCurrentUser(); }, []);
   const promptsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,13 +104,11 @@ export function TopNav() {
     <nav className="flex items-center justify-center gap-1">
       {entries
 .filter((e) => {
+  if (e.id === "studio") return false; // géré dans Admin BO
   if (
-    (e.id === "studio" || e.id === "admin" || e.id === "admin-link" || e.id === "tickets-link") &&
+    (e.id === "admin" || e.id === "admin-link" || e.id === "tickets-link") &&
     role !== "admin" && role !== "super_admin"
-  ) {
-    return false;
-  }
-
+  ) return false;
   return true;
 })
   .map(e => {
@@ -171,7 +167,7 @@ function PromptsDropdown({ onPick, onExplore }: { onPick: (text: string) => void
   }, [activeCat, search]);
 
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-[640px] max-w-[90vw] bg-card border border-border rounded-2xl shadow-elevated overflow-hidden z-50">
+    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-[640px] max-w-[90vw] bg-card border border-border rounded-2xl shadow-elevated overflow-hidden z-[1000]">
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <Search className="w-3.5 h-3.5 text-muted-foreground" />
         <input

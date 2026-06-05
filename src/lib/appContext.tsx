@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { supabase } from "./supabase";
 
 export interface Message {
@@ -23,6 +23,7 @@ export interface Conversation {
   partnerId?: string | null;
   type: "chat" | "workflow";
   workflowId?: string;
+  is_hidden?: boolean;
 }
 
 export type ViewMode = "chat" | "workflow" | "formation" | "admin" | "partners" | "prompts" | "studio";
@@ -63,7 +64,9 @@ interface AppContextType extends AppState {
   setPendingPrefill: (text: string) => void;
   consumePrefill: () => string;
   prepareConversation: (id: string, title: string) => void;
-  loadConversationsFromDB: (userId: string) => Promise<void>;
+  loadConversationsFromDB: (userId: string, isSuperAdmin?: boolean) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
+  hideConversation: (id: string, hidden?: boolean) => Promise<void>;
 }
 
 const fakeUsers = ["François", "Justine", "Marie", "Antoine", "Claire", "Thomas", "Sophie", "Lucas"];
@@ -142,14 +145,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeWorkflow: null,
     activeFormation: null,
     sidebarOpen: true,
-    favorites: [
-      { kind: "partner", id: "eva" },
-      { kind: "agent", id: "redaction" },
-      { kind: "workflow", id: "comite-engagement" },
-    ],
+    favorites: (() => {
+      try { return JSON.parse(localStorage.getItem("chantal_favorites") ?? "[]") as FavoriteRef[]; }
+      catch { return []; }
+    })(),
     currentUser: "François Dupont",
     pendingPrefill: "",
   });
+
+  useEffect(() => {
+    localStorage.setItem("chantal_favorites", JSON.stringify(state.favorites));
+  }, [state.favorites]);
 
   const setCurrentModel = useCallback((m: string) => setState(s => ({ ...s, currentModel: m, currentPartner: null })), []);
   const setCurrentAgent = useCallback((a: string) => setState(s => ({ ...s, currentAgent: a, currentPartner: null })), []);
@@ -235,16 +241,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const loadConversationsFromDB = useCallback(async (userId: string) => {
-    console.log("[DB] Chargement conversations pour", userId.slice(0, 8) + "…");
+  const loadConversationsFromDB = useCallback(async (userId: string, isSuperAdmin = false) => {
 
-    // Utiliser le nom de la FK explicitement pour éviter une erreur d'ambiguïté
-    const { data, error } = await supabase
+    let q = supabase
       .from("conversations")
-      .select("id, title, created_at, updated_at, messages!conversation_id(id, role, content, speaker_name, speaker_avatar_url, speaker_icon, created_at)")
+      .select("id, title, created_at, updated_at, is_hidden, ai_models(name), messages!conversation_id(id, role, content, speaker_name, speaker_avatar_url, speaker_icon, created_at)")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
+    if (!isSuperAdmin) q = q.eq("is_hidden", false);
+    const { data, error } = await q;
 
     if (error) {
       console.error("[DB] Erreur chargement:", error.message, "code:", error.code);
@@ -253,10 +259,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    console.log("[DB] Conversations reçues:", data?.length ?? 0);
 
     type DBMsg = { id: string; role: string; content: string; speaker_name: string | null; speaker_avatar_url: string | null; speaker_icon: string | null; created_at: string };
-    type DBConv = { id: string; title: string | null; created_at: string; updated_at: string; messages: DBMsg[] };
+    type DBConv = { id: string; title: string | null; created_at: string; updated_at: string; is_hidden: boolean; ai_models: { name: string }[] | null; messages: DBMsg[] };
 
     const loaded: Conversation[] = (data as DBConv[] ?? []).map(c => ({
       id: c.id,
@@ -274,7 +279,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           speakerIcon: m.speaker_icon ?? undefined,
           timestamp: new Date(m.created_at),
         })),
-      model: "Groq",
+      model: c.ai_models?.[0]?.name ?? "Llama 3",
+      is_hidden: c.is_hidden ?? false,
       agent: "Aucun",
       partnerId: null,
       type: "chat" as const,
@@ -283,8 +289,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, conversations: loaded, conversationsLoaded: true, activeConversationId: null }));
   }, []);
 
+  const deleteConversation = useCallback(async (id: string) => {
+    await supabase.from("messages").delete().eq("conversation_id", id);
+    await supabase.from("conversations").delete().eq("id", id);
+    setState(s => ({
+      ...s,
+      conversations: s.conversations.filter(c => c.id !== id),
+      activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
+    }));
+  }, []);
+
+  const hideConversation = useCallback(async (id: string, hidden = true) => {
+    await supabase.from("conversations").update({ is_hidden: hidden }).eq("id", id);
+    setState(s => ({
+      ...s,
+      conversations: s.conversations.map(c => c.id === id ? { ...c, is_hidden: hidden } : c),
+    }));
+  }, []);
+
   return (
-    <AppContext.Provider value={{ ...state, setCurrentModel, setCurrentAgent, setCurrentPartner, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, addMessage, createConversation, renameConversation, toggleSidebar, toggleFavorite, isFavorite, setPendingPrefill, consumePrefill, prepareConversation, loadConversationsFromDB }}>
+    <AppContext.Provider value={{ ...state, setCurrentModel, setCurrentAgent, setCurrentPartner, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, addMessage, createConversation, renameConversation, toggleSidebar, toggleFavorite, isFavorite, setPendingPrefill, consumePrefill, prepareConversation, loadConversationsFromDB, deleteConversation, hideConversation }}>
       {children}
     </AppContext.Provider>
   );

@@ -40,9 +40,11 @@ const STATUS_META: Record<TicketStatus, { label: string; color: string; bg: stri
   resolved:    { label: "Résolu",      color: "text-green-600",  bg: "bg-green-500/10" },
 };
 
-function Avatar({ userId, size = "sm" }: { userId?: string; size?: "sm" | "md" }) {
+function Avatar({ name, size = "sm" }: { name?: string | null; size?: "sm" | "md" }) {
   const sz = size === "md" ? "w-9 h-9 text-sm" : "w-7 h-7 text-xs";
-  const initials = (userId ?? "?").slice(0, 2).toUpperCase();
+  const initials = name
+    ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
   return <div className={`${sz} rounded-full bg-brand/20 flex items-center justify-center font-semibold text-brand shrink-0`}>{initials}</div>;
 }
 
@@ -70,13 +72,12 @@ function TicketsPage() {
   async function loadTickets() {
     setLoading(true);
     let q = supabase.from("tickets")
-      .select("*")
+      .select("*, profiles(full_name, email, avatar_url)")
       .order("updated_at", { ascending: false });
     if (!isAdmin) q = q.eq("user_id", profile?.id ?? "");
     if (filterType   !== "all") q = q.eq("type",   filterType);
     if (filterStatus !== "all") q = q.eq("status", filterStatus);
     const { data, error } = await q;
-    console.log("[Tickets] chargés:", data?.length ?? 0, error?.message ?? "OK");
     setTickets((data ?? []) as Ticket[]);
     setLoading(false);
   }
@@ -86,7 +87,7 @@ function TicketsPage() {
   // ── Chargement messages d'un ticket ───────────────────────────────────────
   async function loadMessages(ticketId: string) {
     const { data } = await supabase.from("ticket_messages")
-      .select("*")
+      .select("*, profiles(full_name, email, avatar_url)")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: true });
     setMessages((data ?? []) as TicketMessage[]);
@@ -115,27 +116,44 @@ function TicketsPage() {
 
   async function sendReply() {
     if (!replyText.trim() || !profile || !selectedTicket) return;
+    const content = replyText.trim();
+    setReplyText("");
     setSendingReply(true);
     await supabase.from("ticket_messages").insert({
-      ticket_id: selectedTicket.id, user_id: profile.id, content: replyText.trim(),
+      ticket_id: selectedTicket.id, user_id: profile.id, content,
     });
-    // Update ticket updated_at
     await supabase.from("tickets").update({ updated_at: new Date().toISOString() }).eq("id", selectedTicket.id);
-    setReplyText("");
     setSendingReply(false);
+    await loadMessages(selectedTicket.id);
   }
 
-  async function updateStatus(status: TicketStatus) {
+  async function updateStatus(newStatus: TicketStatus) {
     if (!selectedTicket) return;
-    await supabase.from("tickets").update({ status }).eq("id", selectedTicket.id);
-    setSelectedTicket(t => t ? { ...t, status } : null);
-    setTickets(ts => ts.map(t => t.id === selectedTicket.id ? { ...t, status } : t));
+    await supabase.from("tickets").update({ status: newStatus }).eq("id", selectedTicket.id);
+
+    if (profile) {
+      const time  = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      const name  = profile.full_name ?? profile.email ?? "Admin";
+      const isClosing   = newStatus === "resolved";
+      const isReopening = selectedTicket.status === "resolved" && newStatus !== "resolved";
+      if (isClosing || isReopening) {
+        await supabase.from("ticket_messages").insert({
+          ticket_id: selectedTicket.id,
+          user_id:   profile.id,
+          content:   `⚙️ Ticket ${isClosing ? "clôturé" : "rouvert"} par ${name} à ${time}`,
+        });
+      }
+    }
+
+    setSelectedTicket(t => t ? { ...t, status: newStatus } : null);
+    setTickets(ts => ts.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus } : t));
+    await loadMessages(selectedTicket.id);
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <AppShell>
-      <div className="flex h-full overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
 
         {/* ── Liste ──────────────────────────────────────────────────────── */}
         <div className={`flex flex-col border-r border-border bg-sidebar-bg ${selectedTicket ? "hidden md:flex w-80 shrink-0" : "flex-1 md:w-80 md:flex-none md:shrink-0"}`}>
@@ -184,8 +202,8 @@ function TicketsPage() {
                         </span>
                       </div>
                       {isAdmin && (
-                        <div className="text-[0.6rem] text-muted-foreground mt-0.5 truncate font-mono">
-                          {ticket.user_id.slice(0, 8)}…
+                        <div className="text-[0.6rem] text-muted-foreground mt-0.5 truncate">
+                          {ticket.profiles?.full_name ?? ticket.profiles?.email ?? `${ticket.user_id.slice(0, 8)}…`}
                         </div>
                       )}
                     </div>
@@ -213,8 +231,8 @@ function TicketsPage() {
                   <h3 className="text-sm font-semibold">{selectedTicket.title}</h3>
                 </div>
                 {isAdmin && (
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                    {selectedTicket.user_id.slice(0, 8)}…
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {selectedTicket.profiles?.full_name ?? selectedTicket.profiles?.email ?? `${selectedTicket.user_id.slice(0, 8)}…`}
                   </p>
                 )}
               </div>
@@ -222,7 +240,7 @@ function TicketsPage() {
               {isAdmin && (
                 <div className="shrink-0">
                   <select value={selectedTicket.status}
-                    onChange={e => updateStatus(e.target.value as TicketStatus)}
+                    onChange={e => { void updateStatus(e.target.value as TicketStatus); }}
                     className={`rounded-lg border border-border px-2 py-1 text-xs font-medium cursor-pointer ${STATUS_META[selectedTicket.status].bg} ${STATUS_META[selectedTicket.status].color}`}>
                     {(["open","in_progress","resolved"] as TicketStatus[]).map(s => (
                       <option key={s} value={s}>{STATUS_META[s].label}</option>
@@ -236,19 +254,34 @@ function TicketsPage() {
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <AnimatePresence initial={false}>
                 {messages.map(msg => {
+                  // Message système (clôture / réouverture)
+                  if (msg.content.startsWith("⚙️ ")) {
+                    return (
+                      <motion.div key={msg.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-3 py-1">
+                        <div className="h-px flex-1 bg-border/40" />
+                        <span className="text-[0.6rem] text-muted-foreground/60 shrink-0 select-none">
+                          {msg.content.slice(3)}
+                        </span>
+                        <div className="h-px flex-1 bg-border/40" />
+                      </motion.div>
+                    );
+                  }
+
                   const isOwn = msg.user_id === profile?.id;
                   const isUserMsg = msg.user_id === selectedTicket.user_id;
-                  // Afficher côté droit si c'est le message de l'utilisateur propriétaire du ticket, gauche si admin
                   const alignRight = isAdmin ? isUserMsg : isOwn;
 
                   return (
                     <motion.div key={msg.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                       className={`flex items-end gap-2 ${alignRight ? "flex-row-reverse" : "flex-row"}`}>
-                      <Avatar userId={msg.user_id} size="sm" />
+                      <Avatar name={msg.profiles?.full_name ?? msg.profiles?.email} size="sm" />
                       <div className={`max-w-[70%] ${alignRight ? "items-end" : "items-start"} flex flex-col gap-1`}>
                         <div className="flex items-center gap-2">
                           <span className="text-[0.65rem] text-muted-foreground font-medium">
-                            {msg.user_id === profile?.id ? (profile?.full_name ?? "Moi") : `Admin`}
+                            {msg.user_id === profile?.id
+                              ? (profile?.full_name ?? "Moi")
+                              : (msg.profiles?.full_name ?? "Équipe support")}
                           </span>
                           <span className="text-[0.6rem] text-muted-foreground">{fmtDate(msg.created_at)}</span>
                         </div>
@@ -285,7 +318,7 @@ function TicketsPage() {
             )}
             {selectedTicket.status === "resolved" && (
               <div className="shrink-0 border-t border-border/50 bg-background px-5 py-3 text-xs text-center text-muted-foreground">
-                Ticket résolu · {isAdmin && <button onClick={() => updateStatus("open")} className="text-brand hover:underline">Rouvrir</button>}
+                Ticket résolu · {isAdmin && <button onClick={() => { void updateStatus("open"); }} className="text-brand hover:underline">Rouvrir</button>}
               </div>
             )}
           </div>
