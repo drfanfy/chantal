@@ -120,8 +120,13 @@ export function ChatInterface() {
     (currentAgent !== "Aucun" ? currentAgent : null) ??
     currentModel;
 
-  const userInitials = (profile?.full_name ?? profile?.email ?? "?")
+  // Nom et avatar de l'auteur de la conversation (peut être différent du viewer)
+  const convOwner    = activeConv?.user ?? currentUser;
+  const userInitials = convOwner
     .split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() ?? "").join("");
+  // isOwn : fiable car basé sur user_id comparé au chargement (pas sur le nom)
+  // undefined = conversation nouvelle non encore en DB → toujours la sienne
+  const isOwnConv = !activeConv || (activeConv.isOwn ?? true);
   const currentAiAvatarUrl =
     activeDbPartner?.avatar_url ??
     (legacyPartner ? (partnerImages[legacyPartner.id] ?? null) : null) ?? null;
@@ -131,7 +136,7 @@ export function ChatInterface() {
   useEffect(() => {
     if (profile?.id && !hasLoadedFromDB.current) {
       hasLoadedFromDB.current = true;
-      void loadConversationsFromDB(profile.id, profile.role === "super_admin");
+      void loadConversationsFromDB(profile.id, profile.role === "super_admin", profile.full_name ?? undefined);
     }
   }, [profile?.id, loadConversationsFromDB]);
 
@@ -145,14 +150,12 @@ export function ChatInterface() {
 
   useEffect(() => {
     if (pendingPrefill) {
-      const t = consumePrefill();
-      if (t) {
-        setInput(t);
-        requestAnimationFrame(() => {
-          const ta = textareaRef.current;
-          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-        });
-      }
+      setInput(pendingPrefill);
+      consumePrefill();
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPrefill]);
@@ -317,7 +320,9 @@ export function ChatInterface() {
         : <span key={i}>{part}</span>
     );
 
-  const avatarBase = { userInitials, userAvatar: profile?.avatar_url ?? null, providerBg: PROVIDER_BG };
+  // Avatar : celui du viewer si conv perso, sinon celui de l'auteur chargé depuis DB
+  const ownerAvatar = isOwnConv ? (profile?.avatar_url ?? null) : (activeConv?.ownerAvatarUrl ?? null);
+  const avatarBase  = { userInitials, userAvatar: ownerAvatar, providerBg: PROVIDER_BG };
 
   // ── Barre de saisie — sélecteurs à gauche, textarea à droite ────────────────
 
@@ -419,7 +424,11 @@ export function ChatInterface() {
             <p className="text-xs text-muted-foreground/70">Astuce : utilisez le menu Prompts pour pré-remplir une demande.</p>
           </motion.div>
         </div>
-        {bottomBar}
+        {isOwnConv ? bottomBar : (
+          <div className="shrink-0 border-t border-border/50 bg-muted/20 px-6 py-3 text-xs text-center text-muted-foreground">
+            Conversation de <span className="font-medium text-foreground">{activeConv?.user}</span> — lecture seule
+          </div>
+        )}
       </div>
     );
   }
@@ -435,8 +444,8 @@ export function ChatInterface() {
           onRename={t => renameConversation(activeConv.id, t)}
           speakerName={currentSpeakerName}
           speakerImg={currentAiAvatarUrl}
-          user={currentUser}
-          userAvatar={profile?.avatar_url ?? null}
+          user={convOwner}
+          userAvatar={ownerAvatar}
           userInitials={userInitials}
         />
       )}
@@ -446,7 +455,7 @@ export function ChatInterface() {
             {messages.map(m => (
               <MessageBubble key={m.id} message={m}
                 renderHighlighted={renderHighlightedText}
-                currentUser={currentUser} currentSpeakerName={currentSpeakerName}
+                currentUser={activeConv?.user ?? currentUser} currentSpeakerName={currentSpeakerName}
                 {...avatarBase}
                 aiAvatarUrl={currentAiAvatarUrl} aiIcon={currentAiIcon} aiProvider={currentAiProvider}
               />
@@ -457,7 +466,7 @@ export function ChatInterface() {
               <MessageBubble
                 message={{ id: "streaming", role: "assistant", content: streamingContent, timestamp: new Date(), speakerName: currentSpeakerName }}
                 renderHighlighted={renderHighlightedText}
-                currentUser={currentUser} currentSpeakerName={currentSpeakerName}
+                currentUser={activeConv?.user ?? currentUser} currentSpeakerName={currentSpeakerName}
                 {...avatarBase}
                 aiAvatarUrl={currentAiAvatarUrl} aiIcon={currentAiIcon} aiProvider={currentAiProvider}
               />
@@ -477,7 +486,11 @@ export function ChatInterface() {
           <div ref={messagesEndRef} />
         </div>
       </div>
-      {bottomBar}
+      {isOwnConv ? bottomBar : (
+        <div className="shrink-0 border-t border-border/50 bg-muted/20 px-6 py-3 text-xs text-center text-muted-foreground">
+          Conversation de <span className="font-medium text-foreground">{activeConv?.user}</span> — lecture seule
+        </div>
+      )}
     </div>
   );
 }

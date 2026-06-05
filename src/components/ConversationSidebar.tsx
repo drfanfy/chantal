@@ -90,7 +90,6 @@ export function ConversationSidebar() {
   const navigate = useNavigate();
 
   const isSuperAdmin = profile?.role === "super_admin";
-  const firstName    = (profile?.full_name ?? profile?.email ?? "Moi").split(/\s+/)[0];
   const groups       = groupByDate(conversations);
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
@@ -174,7 +173,7 @@ export function ConversationSidebar() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className={`text-[0.8125rem] font-medium text-foreground truncate leading-snug ${c.is_hidden ? "italic" : ""}`}>{c.title}</div>
-                    <div className="text-[0.7rem] text-muted-foreground">{firstName}</div>
+                    <div className="text-[0.7rem] text-muted-foreground">{c.user}</div>
                   </div>
                   {isSuperAdmin && c.is_hidden && (
                     <EyeOff className="w-3 h-3 text-muted-foreground/50 shrink-0 mt-1" />

@@ -35,7 +35,7 @@ function ChatPage() {
   useEffect(() => {
     if (profile?.id && !conversationsLoaded && !hasTriggeredLoad.current) {
       hasTriggeredLoad.current = true;
-      void loadConversationsFromDB(profile.id, profile.role === "super_admin");
+      void loadConversationsFromDB(profile.id, profile.role === "super_admin", profile.full_name ?? undefined);
     }
   }, [profile?.id, conversationsLoaded, loadConversationsFromDB]);
 

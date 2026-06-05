@@ -29,7 +29,7 @@ const entries: NavEntry[] = [
 export function TopNav() {
   const { profile } = useAuth();
   const role = profile?.role;
-  const { viewMode, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, setCurrentPartner, setPendingPrefill } = useApp();
+  const { viewMode, setViewMode, setActiveWorkflow, setActiveFormation, setActiveConversation, setCurrentPartner, setPendingPrefill, conversations, activeConversationId } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [promptsOpen, setPromptsOpen] = useState(false);
@@ -86,11 +86,17 @@ export function TopNav() {
 
   const handlePromptPick = (text: string) => {
     setPromptsOpen(false);
-    setPendingPrefill(text);
-    // Don't navigate away if already on a chat
-    if (!onChatRoute) {
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    const isOwnConv  = !activeConv || (activeConv.isOwn ?? true);
+
+    if (isOwnConv && onChatRoute) {
+      // Sur ma propre conv → prefill direct
+      setPendingPrefill(text);
+    } else {
+      // Navigation vers nouveau chat → prefill après montage du nouveau composant
       setActiveConversation(null);
       navigate({ to: "/chat" });
+      requestAnimationFrame(() => setPendingPrefill(text));
     }
   };
 

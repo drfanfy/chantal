@@ -24,6 +24,8 @@ export interface Conversation {
   type: "chat" | "workflow";
   workflowId?: string;
   is_hidden?: boolean;
+  ownerAvatarUrl?: string | null;
+  isOwn?: boolean;
 }
 
 export type ViewMode = "chat" | "workflow" | "formation" | "admin" | "partners" | "prompts" | "studio";
@@ -64,7 +66,7 @@ interface AppContextType extends AppState {
   setPendingPrefill: (text: string) => void;
   consumePrefill: () => string;
   prepareConversation: (id: string, title: string) => void;
-  loadConversationsFromDB: (userId: string, isSuperAdmin?: boolean) => Promise<void>;
+  loadConversationsFromDB: (userId: string, isSuperAdmin?: boolean, profileName?: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   hideConversation: (id: string, hidden?: boolean) => Promise<void>;
 }
@@ -241,32 +243,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const loadConversationsFromDB = useCallback(async (userId: string, isSuperAdmin = false) => {
+  const loadConversationsFromDB = useCallback(async (userId: string, isSuperAdmin = false, profileName?: string) => {
 
     let q = supabase
       .from("conversations")
-      .select("id, title, created_at, updated_at, is_hidden, ai_models(name), messages!conversation_id(id, role, content, speaker_name, speaker_avatar_url, speaker_icon, created_at)")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .select("id, title, created_at, updated_at, is_hidden, user_id, ai_models(name), messages!conversation_id(id, role, content, speaker_name, speaker_avatar_url, speaker_icon, created_at)")
+      .order("updated_at", { ascending: false })
+      .limit(100);
     if (!isSuperAdmin) q = q.eq("is_hidden", false);
     const { data, error } = await q;
 
     if (error) {
       console.error("[DB] Erreur chargement:", error.message, "code:", error.code);
-      // Marquer comme chargé même en cas d'erreur pour ne pas bloquer les routes
       setState(s => ({ ...s, conversationsLoaded: true }));
       return;
     }
 
+    // Charger les noms des auteurs (requête séparée, sans dépendance FK)
+    const userIds = [...new Set((data ?? []).map(c => (c as { user_id: string }).user_id))];
+    const profileMap: Record<string, { name: string; avatarUrl: string | null }> = {};
+    if (userIds.length > 0) {
+      const { data: pd } = await supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", userIds);
+      (pd ?? []).forEach((p: { id: string; full_name: string | null; email: string; avatar_url: string | null }) => {
+        profileMap[p.id] = { name: p.full_name ?? p.email ?? "Utilisateur", avatarUrl: p.avatar_url ?? null };
+      });
+    }
 
     type DBMsg = { id: string; role: string; content: string; speaker_name: string | null; speaker_avatar_url: string | null; speaker_icon: string | null; created_at: string };
-    type DBConv = { id: string; title: string | null; created_at: string; updated_at: string; is_hidden: boolean; ai_models: { name: string }[] | null; messages: DBMsg[] };
+    type DBConv = { id: string; title: string | null; created_at: string; updated_at: string; is_hidden: boolean; user_id: string; ai_models: { name: string }[] | null; messages: DBMsg[] };
 
     const loaded: Conversation[] = (data as DBConv[] ?? []).map(c => ({
       id: c.id,
       title: c.title ?? "Conversation",
-      user: userId,
+      user: profileMap[c.user_id]?.name ?? (c.user_id === userId ? (profileName ?? "Moi") : "Utilisateur"),
+      ownerAvatarUrl: profileMap[c.user_id]?.avatarUrl ?? null,
+      isOwn: c.user_id === userId,
       date: new Date(c.updated_at ?? c.created_at),
       messages: (c.messages ?? [])
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
