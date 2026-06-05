@@ -87,15 +87,12 @@ export function HomeDashboard({ onPromptSelect: _onPromptSelect }: { onPromptSel
       const counts: Record<string, number> = {};
       (convPartners ?? []).forEach(c => { if (c.partner_id) counts[c.partner_id] = (counts[c.partner_id] ?? 0) + 1; });
       const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-      const { data: pData } = await supabase.from("partners")
-        .select("id, name, description, avatar_url, personality")
-        .eq("id", topId ?? "")
-        .maybeSingle();
-      // Fallback : premier partenaire disponible
-      const { data: fallbackP } = pData ? { data: null } : await supabase.from("partners")
-        .select("id, name, description, avatar_url, personality").limit(1).maybeSingle();
-      const chosenPartner = (pData ?? fallbackP) as DbPartner | null;
-      if (chosenPartner) setRecDbPartner(chosenPartner);
+      // Requête unique : partner le + utilisé si connu, sinon premier dispo
+      const partnerQuery = topId
+        ? supabase.from("partners").select("id, name, description, avatar_url, personality").eq("id", topId).maybeSingle()
+        : supabase.from("partners").select("id, name, description, avatar_url, personality").limit(1).maybeSingle();
+      const { data: chosenPartner } = await partnerQuery;
+      if (chosenPartner) setRecDbPartner(chosenPartner as DbPartner);
 
       // ── Formation recommandée (première non lue) ──────────────────────────
       const [{ data: progressData }, { data: formationsData }] = await Promise.all([
