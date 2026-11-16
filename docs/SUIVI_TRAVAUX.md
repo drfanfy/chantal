@@ -38,42 +38,15 @@
 
 ## Reste à faire (prochaine session)
 
-1. **Documentation DSI** (docs/01…10 + README) — non commencée, hors docs/annexes/verification-modeles-2026-11-16.md.
-2. **Vérification navigateur** : nécessite un projet Supabase de DEV avec les migrations appliquées (DESCRIPTION
-  Manage Postgres databases.
-
-USAGE
-  supabase db <subcommand> [flags]
-
-GLOBAL FLAGS
-  --help, -h                Show help information
-  --version                 Show version information
-  --completions choice      Print shell completion script (choices: bash, zsh, fish, sh)
-  --log-level choice        Sets the minimum log level (choices: all, trace, debug, info, warn, warning, error, fatal, none)
-  --output-format choice    Output format: text (default), json, or stream-json (NDJSON) (choices: text, json, stream-json)
-  --output, -o choice       Output format of status variables. (choices: env, pretty, json, toml, yaml)
-  --profile string          Use a specific profile for connecting to Supabase API.
-  --debug                   Output debug logs to stderr.
-  --workdir string          Path to a Supabase project directory.
-  --experimental            Enable experimental features.
-  --network-id string       Use the specified Docker network instead of a generated one.
-  --yes                     Answer yes to all prompts.
-  --dns-resolver choice     Look up domain names using the specified resolver. (choices: native, https)
-  --create-ticket           Create a support ticket for any CLI error.
-  --agent choice            Override agent detection: yes, no, or auto. (choices: auto, yes, no)
-
-SUBCOMMANDS
-  diff        Diffs the local database for schema changes
-  dump        Dumps data or schemas from the remote database
-  push        Push new migrations to the remote database
-  pull        Pull schema from the remote database
-  reset       Resets the local database to current migrations
-  lint        Checks local database for typing error
-  start       Starts local Postgres database
-  query       Execute a SQL query against the database
-  advisors    Checks database for security and performance issues
-  schema      Manage database schema
-[90m│[39m
-[31m■[39m  [31mHelp requested[39m sur un projet dédié, jamais la prod).
-3. Points connus : sauvegarde des formations supprime/recrée les chapitres (perte de progression) — à corriger ; prise en compte des crons Vercel avec la sortie Nitro à vérifier ; adaptateur Google : syntaxe SSE/systemInstruction à valider par un test réel.
+1. **Documentation DSI** (docs/01…10 + lien depuis README) — non commencée. Seule l'annexe docs/annexes/verification-modeles-2026-11-16.md existe.
+2. **Vérification navigateur** : nécessite un projet Supabase de DEV avec les migrations appliquées (`npx supabase link` sur un projet dédié puis `npx supabase db push` — jamais la prod).
+3. Points connus :
+   - sauvegarde des formations : supprime/recrée les chapitres (perte de progression) — à corriger ;
+   - cron Vercel déclaré dans vercel.json : prise en compte avec la sortie Nitro (Build Output API) à vérifier ;
+   - adaptateur Google : `?alt=sse`, `systemInstruction` à valider par un test réel ;
+   - lint : 1 erreur héritée dans src/components/ui/chart.tsx (`@ts-nocheck` shadcn).
 4. Déploiement : sauvegarde de la base prod → migrations → variables serveur Vercel → test des modèles → activation. Jamais sans validation explicite.
+
+## Incident de session
+
+- 2026-11-16 : une commande de mise à jour de ce fichier a déclenché par erreur `npx supabase db push` (substitution shell). La commande a échoué immédiatement (sous-commande invalide, aucun projet lié — vérifié : « Cannot find project ref »). Aucun effet sur une base.
