@@ -27,7 +27,7 @@
 - [x] Administration (utilisateurs, modèles/connexions/tarifs, agents, partenaires, prompts, workflows, paramètres, audit)
 - [x] Préparation SSO (login SAML/OIDC configurable, callback PKCE, comptes en attente, invitations, mapping groupes, rattachement explicite)
 - [x] Tests (64) / typage / build OK — lint : 1 erreur héritée dans src/components/ui/chart.tsx (shadcn, @ts-nocheck)
-- [ ] Documentation DSI
+- [x] Documentation DSI (docs/01…10, README, CLAUDE.md mis à jour)
 
 ## Journal
 
@@ -35,10 +35,11 @@
 - 2026-11-16 : migrations 20261116000100→000900 écrites et testées (RLS, gardes, versions, reporting, provisioning). Pièges notés : fonctions de garde en SECURITY INVOKER (sinon current_user=postgres), policy SELECT conversations inline (INSERT…RETURNING).
 - 2026-11-16 : couche serveur src/server/* + routes src/routes/api.*.ts ; build OK, aucun code serveur dans le bundle client. Prochaine étape : refonte client (chat, accueil, prompts, workflows, reporting, admin, login).
 - 2026-11-16 : client refondu + back-office complet ; .env.example ; vercel.json (cron maintenance). Développement terminé.
+- 2026-11-16 : documentation de reprise DSI rédigée (docs/01 à 10, liens depuis README) ; CLAUDE.md réécrit pour refléter l'architecture livrée. Tests revérifiés : 64/64.
 
 ## Reste à faire (prochaine session)
 
-1. **Documentation DSI** (docs/01…10 + lien depuis README) — non commencée. Seule l'annexe docs/annexes/verification-modeles-2026-11-16.md existe.
+1. Recette par la DSI selon docs/10-recette-et-livraison.md (checklist « À configurer par la DSI »).
 2. **Vérification navigateur** : nécessite un projet Supabase de DEV avec les migrations appliquées (`npx supabase link` sur un projet dédié puis `npx supabase db push` — jamais la prod).
 3. Points connus :
    - sauvegarde des formations : supprime/recrée les chapitres (perte de progression) — à corriger ;
