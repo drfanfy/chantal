@@ -1,300 +1,621 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+/**
+ * Reporting d'usage (administrateurs). Source : RPC report_usage (agrégats
+ * calculés en base, aucune donnée de contenu). Indicateurs définis dans
+ * docs/03-fonctionnement-metier.md § Reporting.
+ *  - « — » = donnée indisponible (fournisseur sans tokens, tarif absent…),
+ *    distinct de 0 ;
+ *  - les coûts sont des ESTIMATIONS fondées sur les tarifs saisis et datés ;
+ *  - les tests d'administration sont exclus par défaut.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid, Area, AreaChart,
-} from "recharts";
-import {
-  MessageSquare, Users, Euro, Bot, Cpu, Zap, TrendingUp,
-  Activity, Shield, BookOpen, FileText, AlertTriangle, CheckCircle2,
-  Clock, Star,
+  Download,
+  RefreshCw,
+  Users,
+  MessageSquare,
+  Zap,
+  Timer,
+  Coins,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/authContext";
+import { hasPermission } from "@/lib/permissions";
+import { errorMessage } from "@/lib/api";
+import { downloadText } from "@/lib/workflowsClient";
+import { demoReport } from "@/lib/reportingDemo";
 
-const modelUsage = [
-  { name: "Claude", uses: 482, cost: 214, fill: "oklch(0.45 0.18 265)" },
-  { name: "OpenAI", uses: 396, cost: 238, fill: "oklch(0.55 0.18 155)" },
-  { name: "Gemini", uses: 255, cost: 121, fill: "oklch(0.65 0.15 45)" },
-  { name: "Notebook LLM", uses: 151, cost: 69, fill: "oklch(0.60 0.15 310)" },
-];
+type N = number | null;
+export interface UsageReport {
+  period: { from: string; to: string };
+  instrumentation_since: string | null;
+  kpis: {
+    active_users: number;
+    requests: number;
+    success: number;
+    errors: number;
+    cancelled: number;
+    latency_avg_ms: N;
+    latency_p95_ms: N;
+    duration_avg_ms: N;
+    input_tokens: N;
+    output_tokens: N;
+    requests_with_tokens: number;
+    estimated_cost: N;
+    requests_with_cost: number;
+    currencies: string[];
+    conversations_created: number;
+    workflow_runs: number;
+    workflow_runs_succeeded: number;
+    workflow_runs_failed: number;
+    workflow_retries: number;
+  };
+  by_model: {
+    model_id: string | null;
+    name: string;
+    provider: string | null;
+    requests: number;
+    errors: number;
+    input_tokens: N;
+    output_tokens: N;
+    requests_with_tokens: number;
+    estimated_cost: N;
+    requests_with_cost: number;
+    latency_avg_ms: N;
+  }[];
+  by_provider: {
+    provider: string;
+    requests: number;
+    errors: number;
+    estimated_cost: N;
+    requests_with_cost: number;
+  }[];
+  by_agent: { agent_id: string; name: string; requests: number; users: number; errors: number }[];
+  by_source: { source: string; requests: number; errors: number }[];
+  by_workflow: {
+    workflow_id: string;
+    name: string;
+    runs: number;
+    succeeded: number;
+    failed: number;
+    retries: number;
+    avg_duration_ms: N;
+    estimated_cost: N;
+    requests_without_cost: number;
+  }[];
+  daily: {
+    day: string;
+    requests: number;
+    errors: number;
+    active_users: number;
+    estimated_cost: N;
+  }[];
+  pricing_used: {
+    model: string;
+    effective_from: string;
+    currency: string;
+    source_url: string | null;
+  }[];
+}
 
-const agentUsage = [
-  { name: "Assistant rédaction", uses: 342, users: 38, satisfaction: 4.7 },
-  { name: "Analyse marketing", uses: 218, users: 29, satisfaction: 4.5 },
-  { name: "Analyse commerciale", uses: 195, users: 31, satisfaction: 4.6 },
-  { name: "Comité Engagement", uses: 167, users: 18, satisfaction: 4.8 },
-  { name: "Graphiste", uses: 124, users: 22, satisfaction: 4.3 },
-  { name: "Développeur", uses: 112, users: 15, satisfaction: 4.4 },
-  { name: "Organisation", uses: 88, users: 21, satisfaction: 4.2 },
-];
+type Range = "7d" | "30d" | "90d" | "custom";
+const fmt = (n: N, digits = 0) =>
+  n == null ? "—" : Number(n).toLocaleString("fr-FR", { maximumFractionDigits: digits });
+const ms = (n: N) =>
+  n == null ? "—" : n < 1000 ? `${Math.round(Number(n))} ms` : `${(Number(n) / 1000).toFixed(1)} s`;
+const SOURCE_LABEL: Record<string, string> = {
+  chat: "Chat",
+  workflow: "Workflows",
+  title: "Titres automatiques",
+  admin_test: "Tests admin",
+};
 
-const workflowUsage = [
-  { name: "Veille SEO", launches: 89, avgTime: "2.1s", completion: "96%", cost: "124 €" },
-  { name: "Prépa Comité engagement", launches: 67, avgTime: "3.4s", completion: "98%", cost: "198 €" },
-  { name: "Analyse commerciale", launches: 54, avgTime: "2.8s", completion: "94%", cost: "156 €" },
-  { name: "Analyse démographique", launches: 41, avgTime: "2.3s", completion: "97%", cost: "89 €" },
-  { name: "Projections financières", launches: 38, avgTime: "4.1s", completion: "92%", cost: "112 €" },
-];
-
-const adoptionData = [
-  { month: "Nov", interactions: 420, cost: 285 },
-  { month: "Déc", interactions: 580, cost: 340 },
-  { month: "Jan", interactions: 745, cost: 392 },
-  { month: "Fév", interactions: 890, cost: 445 },
-  { month: "Mar", interactions: 1080, cost: 520 },
-  { month: "Avr", interactions: 1284, cost: 642 },
-];
-
-const activityFeed = [
-  { user: "François", action: "a utilisé", target: "Assistant rédaction", time: "il y a 3 min" },
-  { user: "Justine", action: "a lancé", target: "Analyse marketing", time: "il y a 12 min" },
-  { user: "Barbara", action: "a utilisé", target: "Comité Engagement", time: "il y a 25 min" },
-  { user: "Antoine", action: "a lancé", target: "Veille SEO", time: "il y a 38 min" },
-  { user: "Claire", action: "a utilisé", target: "Graphiste", time: "il y a 1h" },
-  { user: "Thomas", action: "a lancé", target: "Projections financières", time: "il y a 1h30" },
-  { user: "Marie", action: "a utilisé", target: "Assistant rédaction", time: "il y a 2h" },
-  { user: "Lucas", action: "a lancé", target: "Analyse commerciale", time: "il y a 2h15" },
-];
-
-type TimeRange = "7d" | "30d" | "6m";
+function rangeDates(range: Range, from: string, to: string) {
+  if (range === "custom")
+    return {
+      from: new Date(from).toISOString(),
+      to: new Date(new Date(to).getTime() + 86400000).toISOString(),
+    };
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+  return {
+    from: new Date(Date.now() - days * 86400000).toISOString(),
+    to: new Date(Date.now() + 60000).toISOString(),
+  };
+}
 
 export function AdminDashboard() {
-  const [timeRange, setTimeRange] = useState<TimeRange>("30d");
+  const { profile } = useAuth();
+  const canExport = hasPermission(profile?.role, "reporting.export");
+  const [range, setRange] = useState<Range>("30d");
+  const [customFrom, setCustomFrom] = useState(
+    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
+  );
+  const [customTo, setCustomTo] = useState(new Date().toISOString().slice(0, 10));
+  const [modelId, setModelId] = useState("");
+  const [agentId, setAgentId] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [includeTests, setIncludeTests] = useState(false);
+  const [report, setReport] = useState<UsageReport | null>(null);
+  const [demo, setDemo] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState<{
+    models: { id: string; name: string }[];
+    agents: { id: string; name: string }[];
+    workflows: { id: string; name: string }[];
+  }>({ models: [], agents: [], workflows: [] });
+
+  useEffect(() => {
+    void Promise.all([
+      supabase.from("ai_models").select("id, name").order("name"),
+      supabase.from("agents").select("id, name").order("name"),
+      supabase.from("workflow_definitions").select("id, name").order("name"),
+      supabase.from("app_settings").select("value").eq("key", "reporting_demo_mode").maybeSingle(),
+    ]).then(([m, a, w, s]) => {
+      setOptions({
+        models: (m.data ?? []) as { id: string; name: string }[],
+        agents: (a.data ?? []) as { id: string; name: string }[],
+        workflows: (w.data ?? []) as { id: string; name: string }[],
+      });
+      setDemo((s.data as { value?: unknown } | null)?.value === true);
+    });
+  }, []);
+
+  const params = useMemo(() => {
+    const d = rangeDates(range, customFrom, customTo);
+    return {
+      p_from: d.from,
+      p_to: d.to,
+      p_model_ids: modelId ? [modelId] : null,
+      p_agent_ids: agentId ? [agentId] : null,
+      p_workflow_ids: workflowId ? [workflowId] : null,
+      p_include_tests: includeTests,
+    };
+  }, [range, customFrom, customTo, modelId, agentId, workflowId, includeTests]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    if (demo) {
+      setReport(demoReport(params.p_from, params.p_to));
+      setLoading(false);
+      return;
+    }
+    const { data, error: e } = await supabase.rpc("report_usage", params);
+    if (e) {
+      setError(errorMessage(e));
+      setReport(null);
+    } else {
+      setError(null);
+      setReport(data as UsageReport);
+    }
+    setLoading(false);
+  }, [params, demo]);
+  useEffect(() => void load(), [load]);
+
+  async function exportCsv() {
+    const { data, error: e } = await supabase.rpc("report_usage_rows", params);
+    if (e) {
+      toast.error(errorMessage(e));
+      return;
+    }
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (!rows.length) {
+      toast.info("Aucune donnée à exporter sur cette période");
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    const esc = (v: unknown) => (v == null ? "" : `"${String(v).replace(/"/g, '""')}"`);
+    downloadText(
+      "﻿" +
+        [headers.join(";"), ...rows.map((r) => headers.map((h) => esc(r[h])).join(";"))].join("\n"),
+      `chantal-usage-${params.p_from.slice(0, 10)}_${params.p_to.slice(0, 10)}.csv`,
+      "text/csv",
+    );
+  }
+
+  const k = report?.kpis;
+  const empty =
+    !loading &&
+    report &&
+    k &&
+    k.requests === 0 &&
+    k.workflow_runs === 0 &&
+    k.conversations_created === 0;
+  const currency =
+    k?.currencies?.length === 1 ? k.currencies[0] : k?.currencies?.length ? "devises mixtes" : "";
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gouvernance IA</h1>
-            <p className="text-sm text-muted-foreground mt-1">Vue d'ensemble de l'utilisation et des coûts</p>
+            <h1 className="text-2xl font-bold tracking-tight">Reporting d'usage</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Usages réels mesurés côté serveur. Aucun contenu de conversation n'est exploité.
+            </p>
           </div>
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-            {(["7d", "30d", "6m"] as TimeRange[]).map(r => (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Actualiser
+            </button>
+            {canExport && !demo && (
               <button
-                key={r}
-                onClick={() => setTimeRange(r)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  timeRange === r ? "bg-surface text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                }`}
+                type="button"
+                onClick={() => void exportCsv()}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
               >
-                {r === "7d" ? "7 jours" : r === "30d" ? "30 jours" : "6 mois"}
+                <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-5 gap-4 mb-8">
-          <KpiCard icon={<MessageSquare className="w-5 h-5" />} label="Interactions" value="1 284" change="+18.9%" />
-          <KpiCard icon={<Users className="w-5 h-5" />} label="Utilisateurs actifs" value="47" change="+6" />
-          <KpiCard icon={<Euro className="w-5 h-5" />} label="Coût estimé" value="642 €" change="+23.4%" />
-          <KpiCard icon={<Bot className="w-5 h-5" />} label="Agent le + utilisé" value="Rédaction" sub="342 utilisations" />
-          <KpiCard icon={<Cpu className="w-5 h-5" />} label="Modèle le + utilisé" value="Claude" sub="482 utilisations" />
-        </div>
-
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          {/* Usage by Model */}
-          <div className="col-span-2 bg-surface border border-border rounded-xl p-5">
-            <h3 className="text-sm font-semibold mb-4">Utilisation par modèle</h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height={192}>
-                <BarChart data={modelUsage} barSize={32}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
-                    formatter={(value: unknown, name: unknown) => [String(name) === "uses" ? `${value} utilisations` : `${value} €`, String(name) === "uses" ? "Utilisations" : "Coût"]}
-                  />
-                  <Bar dataKey="uses" radius={[6, 6, 0, 0]} fill="oklch(0.45 0.18 265 / 0.7)" />
-                  <Bar dataKey="cost" radius={[6, 6, 0, 0]} fill="oklch(0.45 0.18 265 / 0.25)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex gap-4 mt-3">
-              {modelUsage.map(m => (
-                <div key={m.name} className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{m.name}</span>: {m.uses} util. / {m.cost} €
-                </div>
-              ))}
-            </div>
+        {demo && (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-800"
+          >
+            MODE DÉMONSTRATION — données fictives (paramètre « reporting_demo_mode »). Ne pas
+            utiliser pour piloter.
           </div>
+        )}
 
-          {/* Activity Feed */}
-          <div className="bg-surface border border-border rounded-xl p-5">
-            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-brand" /> Activité récente
-            </h3>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {activityFeed.map((item, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="flex items-start gap-3 text-xs"
-                >
-                  <div className="w-6 h-6 rounded-full bg-brand/10 text-brand flex items-center justify-center text-[0.625rem] font-semibold shrink-0">
-                    {item.user[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium text-foreground">{item.user}</span>{" "}
-                    <span className="text-muted-foreground">{item.action}</span>{" "}
-                    <span className="font-medium text-foreground">{item.target}</span>
-                    <div className="text-[0.625rem] text-muted-foreground mt-0.5">{item.time}</div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Agent Usage */}
-        <div className="bg-surface border border-border rounded-xl p-5 mb-8">
-          <h3 className="text-sm font-semibold mb-4">Utilisation par agent</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-muted-foreground">
-                <th className="text-left py-2 px-3 font-medium">Agent</th>
-                <th className="text-right py-2 px-3 font-medium">Utilisations</th>
-                <th className="text-right py-2 px-3 font-medium">Utilisateurs</th>
-                <th className="text-right py-2 px-3 font-medium">Satisfaction</th>
-                <th className="text-left py-2 px-3 font-medium w-40">Répartition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agentUsage.map((a, i) => (
-                <tr key={a.name} className="border-t border-border/50">
-                  <td className="py-2.5 px-3 font-medium">{a.name}</td>
-                  <td className="py-2.5 px-3 text-right">{a.uses}</td>
-                  <td className="py-2.5 px-3 text-right">{a.users}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      <Star className="w-3 h-3 text-warning fill-warning" /> {a.satisfaction}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="w-full bg-muted rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full bg-brand/60 transition-all"
-                        style={{ width: `${(a.uses / agentUsage[0].uses) * 100}%` }}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6 mb-8">
-          {/* Workflow Usage */}
-          <div className="bg-surface border border-border rounded-xl p-5">
-            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-brand" /> Workflows
-            </h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted-foreground">
-                  <th className="text-left py-2 font-medium">Workflow</th>
-                  <th className="text-right py-2 font-medium">Lancements</th>
-                  <th className="text-right py-2 font-medium">Temps moy.</th>
-                  <th className="text-right py-2 font-medium">Complétion</th>
-                  <th className="text-right py-2 font-medium">Coût</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workflowUsage.map(w => (
-                  <tr key={w.name} className="border-t border-border/50">
-                    <td className="py-2 font-medium text-xs">{w.name}</td>
-                    <td className="py-2 text-right text-xs">{w.launches}</td>
-                    <td className="py-2 text-right text-xs">{w.avgTime}</td>
-                    <td className="py-2 text-right text-xs text-success">{w.completion}</td>
-                    <td className="py-2 text-right text-xs">{w.cost}</td>
-                  </tr>
+        <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
+          <label className="text-xs">
+            Période
+            <br />
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value as Range)}
+              className="mt-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            >
+              <option value="7d">7 derniers jours</option>
+              <option value="30d">30 derniers jours</option>
+              <option value="90d">90 derniers jours</option>
+              <option value="custom">Personnalisée</option>
+            </select>
+          </label>
+          {range === "custom" && (
+            <>
+              <label className="text-xs">
+                Du
+                <br />
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="mt-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                />
+              </label>
+              <label className="text-xs">
+                Au
+                <br />
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="mt-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                />
+              </label>
+            </>
+          )}
+          {(
+            [
+              ["Modèle", modelId, setModelId, options.models],
+              ["Agent", agentId, setAgentId, options.agents],
+              ["Workflow", workflowId, setWorkflowId, options.workflows],
+            ] as const
+          ).map(([l, val, set, opts]) => (
+            <label key={l} className="text-xs">
+              {l}
+              <br />
+              <select
+                value={val}
+                onChange={(e) => set(e.target.value)}
+                className="mt-1 max-w-[12rem] rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">Tous</option>
+                {opts.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Adoption Over Time */}
-          <div className="bg-surface border border-border rounded-xl p-5">
-            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-brand" /> Adoption (6 mois)
-            </h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height={192}>
-                <AreaChart data={adoptionData}>
-                  <defs>
-                    <linearGradient id="colorInteractions" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="oklch(0.45 0.18 265)" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="oklch(0.45 0.18 265)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
-                  <Area type="monotone" dataKey="interactions" stroke="oklch(0.45 0.18 265)" fill="url(#colorInteractions)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="cost" stroke="oklch(0.55 0.15 155)" strokeWidth={2} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand" /> Interactions</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success" /> Coût (€)</span>
-            </div>
-          </div>
+              </select>
+            </label>
+          ))}
+          <label className="flex items-center gap-1.5 text-xs pb-2">
+            <input
+              type="checkbox"
+              checked={includeTests}
+              onChange={(e) => setIncludeTests(e.target.checked)}
+            />{" "}
+            Inclure les tests admin
+          </label>
         </div>
 
-        {/* Governance Block */}
-        <div className="bg-surface border border-border rounded-xl p-5 mb-8">
-          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-brand" /> Gouvernance
-          </h3>
-          <div className="grid grid-cols-5 gap-4">
-            <GovernanceItem icon={<BookOpen className="w-4 h-4" />} label="Prompts disponibles" value="15" />
-            <GovernanceItem icon={<CheckCircle2 className="w-4 h-4" />} label="Formations complétées" value="89" />
-            <GovernanceItem icon={<FileText className="w-4 h-4" />} label="Documents traités" value="234" />
-            <GovernanceItem icon={<AlertTriangle className="w-4 h-4" />} label="Alertes détectées" value="3" warn />
-            <GovernanceItem icon={<Euro className="w-4 h-4" />} label="Statut budget" value="Sous contrôle" success />
+        {error && (
+          <div
+            role="alert"
+            className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          >
+            {error}
           </div>
-        </div>
+        )}
+        {loading && <div className="text-sm text-muted-foreground">Chargement…</div>}
+        {empty && (
+          <div className="rounded-xl border border-dashed border-border p-10 text-center">
+            <Info className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm font-medium">Aucune activité mesurée sur cette période.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {report?.instrumentation_since
+                ? `Mesure active depuis le ${new Date(report.instrumentation_since).toLocaleDateString("fr-FR")}.`
+                : "La mesure démarre avec les premiers usages après mise en production de cette version."}
+            </p>
+          </div>
+        )}
+
+        {report && k && !empty && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <Kpi
+                icon={<Users className="w-4 h-4" />}
+                label="Utilisateurs actifs"
+                value={fmt(k.active_users)}
+                hint="Au moins une requête IA ou une exécution sur la période"
+              />
+              <Kpi
+                icon={<MessageSquare className="w-4 h-4" />}
+                label="Requêtes IA"
+                value={fmt(k.requests)}
+                sub={`${fmt(k.errors)} en erreur · ${fmt(k.conversations_created)} conversations créées`}
+              />
+              <Kpi
+                icon={<Zap className="w-4 h-4" />}
+                label="Exécutions de workflows"
+                value={fmt(k.workflow_runs)}
+                sub={`${fmt(k.workflow_runs_succeeded)} réussies · ${fmt(k.workflow_runs_failed)} échecs · ${fmt(k.workflow_retries)} relances`}
+              />
+              <Kpi
+                icon={<Timer className="w-4 h-4" />}
+                label="Latence (1er token)"
+                value={ms(k.latency_avg_ms)}
+                sub={`p95 ${ms(k.latency_p95_ms)} · durée moy. ${ms(k.duration_avg_ms)}`}
+              />
+              <Kpi
+                icon={<Coins className="w-4 h-4" />}
+                label={`Coût estimé${currency ? ` (${currency})` : ""}`}
+                value={fmt(k.estimated_cost, 2)}
+                sub={`Couverture : ${fmt(k.requests_with_cost)} / ${fmt(k.requests)} requêtes`}
+                warn={k.requests_with_cost < k.requests}
+                hint="Estimation selon les tarifs saisis ; « — » si aucun tarif ou token disponible"
+              />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Kpi
+                label="Tokens d'entrée"
+                value={fmt(k.input_tokens)}
+                sub={`${fmt(k.requests_with_tokens)} / ${fmt(k.requests)} requêtes renseignées`}
+                warn={k.requests_with_tokens < k.requests}
+              />
+              <Kpi label="Tokens de sortie" value={fmt(k.output_tokens)} />
+              {report.by_source.map((s) => (
+                <Kpi
+                  key={s.source}
+                  label={SOURCE_LABEL[s.source] ?? s.source}
+                  value={fmt(s.requests)}
+                  sub={`${fmt(s.errors)} erreurs`}
+                />
+              ))}
+            </div>
+
+            <Panel title="Requêtes par jour">
+              {report.daily.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucune requête.</p>
+              ) : (
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={report.daily}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(d: string) => d.slice(5)}
+                      />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                      <Bar
+                        dataKey="requests"
+                        name="Requêtes"
+                        fill="oklch(0.45 0.18 265 / 0.75)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="errors"
+                        name="Erreurs"
+                        fill="oklch(0.6 0.2 25 / 0.7)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </Panel>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Panel title="Par modèle">
+                <Table
+                  headers={[
+                    "Modèle",
+                    "Fournisseur",
+                    "Requêtes",
+                    "Erreurs",
+                    "Tokens (E/S)",
+                    "Coût estimé",
+                    "Latence",
+                  ]}
+                  rows={report.by_model.map((m) => [
+                    m.name,
+                    m.provider ?? "—",
+                    fmt(m.requests),
+                    fmt(m.errors),
+                    m.requests_with_tokens
+                      ? `${fmt(m.input_tokens)} / ${fmt(m.output_tokens)}`
+                      : "—",
+                    m.requests_with_cost ? fmt(m.estimated_cost, 2) : "—",
+                    ms(m.latency_avg_ms),
+                  ])}
+                />
+              </Panel>
+              <Panel title="Par fournisseur">
+                <Table
+                  headers={["Fournisseur", "Requêtes", "Erreurs", "Coût estimé"]}
+                  rows={report.by_provider.map((p) => [
+                    p.provider,
+                    fmt(p.requests),
+                    fmt(p.errors),
+                    p.requests_with_cost ? fmt(p.estimated_cost, 2) : "—",
+                  ])}
+                />
+              </Panel>
+              <Panel title="Par agent">
+                <Table
+                  headers={["Agent", "Requêtes", "Utilisateurs", "Erreurs"]}
+                  rows={report.by_agent.map((a) => [
+                    a.name,
+                    fmt(a.requests),
+                    fmt(a.users),
+                    fmt(a.errors),
+                  ])}
+                />
+              </Panel>
+              <Panel title="Par workflow">
+                <Table
+                  headers={[
+                    "Workflow",
+                    "Exécutions",
+                    "Réussies",
+                    "Échecs",
+                    "Relances",
+                    "Durée moy.",
+                    "Coût estimé",
+                  ]}
+                  rows={report.by_workflow.map((w) => [
+                    w.name,
+                    fmt(w.runs),
+                    fmt(w.succeeded),
+                    fmt(w.failed),
+                    fmt(w.retries),
+                    ms(w.avg_duration_ms),
+                    w.requests_without_cost > 0 && w.estimated_cost == null
+                      ? "—"
+                      : fmt(w.estimated_cost, 2),
+                  ])}
+                />
+              </Panel>
+            </div>
+
+            <Panel title="Tarifs utilisés pour les estimations">
+              {report.pricing_used.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Aucun tarif appliqué sur la période : les coûts sont indisponibles. Saisissez les
+                  tarifs dans Admin › Modèles IA.
+                </p>
+              ) : (
+                <Table
+                  headers={["Modèle", "Tarif en vigueur depuis", "Devise", "Source"]}
+                  rows={report.pricing_used.map((p) => [
+                    p.model,
+                    new Date(p.effective_from).toLocaleDateString("fr-FR"),
+                    p.currency,
+                    p.source_url ?? "—",
+                  ])}
+                />
+              )}
+              <p className="mt-2 text-[0.7rem] text-muted-foreground">
+                Les paliers « long contexte » des fournisseurs ne sont pas modélisés : le coût réel
+                peut être supérieur pour les très longues requêtes. Seule la facture du fournisseur
+                fait foi.
+              </p>
+            </Panel>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function KpiCard({ icon, label, value, change, sub }: { icon: React.ReactNode; label: string; value: string; change?: string; sub?: string }) {
+function Kpi({
+  icon,
+  label,
+  value,
+  sub,
+  hint,
+  warn,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  hint?: string;
+  warn?: boolean;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-surface border border-border rounded-xl p-4"
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center text-brand">{icon}</div>
-        <span className="text-xs text-muted-foreground font-medium">{label}</span>
+    <div className="bg-card border border-border rounded-xl p-4" title={hint}>
+      <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+        {icon && <span className="text-brand">{icon}</span>}
+        {label}
+        {warn && (
+          <AlertTriangle className="w-3 h-3 text-amber-600" aria-label="Données partielles" />
+        )}
       </div>
-      <div className="text-xl font-bold tracking-tight">{value}</div>
-      {change && <span className="text-xs text-success font-medium">{change}</span>}
-      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
-    </motion.div>
+      <div className="text-xl font-bold tracking-tight tabular-nums">{value}</div>
+      {sub && <div className="text-[0.7rem] text-muted-foreground mt-0.5">{sub}</div>}
+    </div>
   );
 }
 
-function GovernanceItem({ icon, label, value, warn, success }: { icon: React.ReactNode; label: string; value: string; warn?: boolean; success?: boolean }) {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-        warn ? "bg-destructive/10 text-destructive" : success ? "bg-success/10 text-success" : "bg-brand/10 text-brand"
-      }`}>
-        {icon}
-      </div>
-      <div>
-        <div className={`text-sm font-bold ${warn ? "text-destructive" : success ? "text-success" : ""}`}>{value}</div>
-        <div className="text-[0.625rem] text-muted-foreground">{label}</div>
-      </div>
+    <section className="bg-card border border-border rounded-xl p-4">
+      <h2 className="text-sm font-semibold mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Table({ headers, rows }: { headers: string[]; rows: (string | number)[][] }) {
+  if (!rows.length) return <p className="text-sm text-muted-foreground">Aucune donnée.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs text-muted-foreground text-left">
+            {headers.map((h) => (
+              <th key={h} scope="col" className="py-1.5 pr-3 font-medium whitespace-nowrap">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t border-border/60">
+              {r.map((c, j) => (
+                <td key={j} className={`py-1.5 pr-3 ${j > 0 ? "tabular-nums" : "font-medium"}`}>
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

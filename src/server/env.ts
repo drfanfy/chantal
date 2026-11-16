@@ -39,7 +39,10 @@ export interface ServerConfig {
 }
 
 export function serverConfig(): ServerConfig {
-  const appEnv = (read("APP_ENV") ?? (process.env.NODE_ENV === "production" ? "production" : "development")) as ServerConfig["appEnv"];
+  const appEnv = (read("APP_ENV") ??
+    (process.env.NODE_ENV === "production"
+      ? "production"
+      : "development")) as ServerConfig["appEnv"];
   return {
     supabaseUrl: read("SUPABASE_URL") ?? read("VITE_SUPABASE_URL"),
     supabaseAnonKey: read("SUPABASE_ANON_KEY") ?? read("VITE_SUPABASE_ANON_KEY"),
@@ -52,7 +55,12 @@ export function serverConfig(): ServerConfig {
     // Le fournisseur fictif n'est jamais disponible en production.
     aiEnableMockProvider: read("AI_ENABLE_MOCK_PROVIDER") === "true" && appEnv !== "production",
     workflowMaxActiveRunsPerUser: int("WORKFLOW_MAX_ACTIVE_RUNS_PER_USER", 2, 1, 10),
-    chatMaxAttachmentBytes: int("CHAT_MAX_ATTACHMENT_BYTES", 10 * 1024 * 1024, 1024, 30 * 1024 * 1024),
+    chatMaxAttachmentBytes: int(
+      "CHAT_MAX_ATTACHMENT_BYTES",
+      10 * 1024 * 1024,
+      1024,
+      30 * 1024 * 1024,
+    ),
     titleModelApiId: read("CHAT_TITLE_MODEL"),
     cronSecret: read("CRON_SECRET"),
   };
@@ -74,7 +82,10 @@ export const ALLOWED_SECRET_NAMES = new Set([
 ]);
 
 export function isAllowedSecretName(name: string): boolean {
-  return /^[A-Z][A-Z0-9_]{2,63}$/.test(name) && (ALLOWED_SECRET_NAMES.has(name) || name.startsWith("CHANTAL_SECRET_"));
+  return (
+    /^[A-Z][A-Z0-9_]{2,63}$/.test(name) &&
+    (ALLOWED_SECRET_NAMES.has(name) || name.startsWith("CHANTAL_SECRET_"))
+  );
 }
 
 export function readSecret(name: string | null | undefined): string | undefined {

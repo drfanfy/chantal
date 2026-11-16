@@ -1,4 +1,3 @@
-import { AuthProvider } from "@/lib/authContext";
 import {
   Outlet,
   Link,
@@ -7,9 +6,12 @@ import {
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
+import { AuthProvider, useAuth } from "@/lib/authContext";
 import { AppProvider } from "@/lib/appContext";
+import { FavoritesProvider } from "@/lib/favorites";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useAuth } from "@/lib/authContext";
+import { Toaster } from "@/components/ui/sonner";
+import { hasPermission } from "@/lib/permissions";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -17,9 +19,7 @@ function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">
-          Page introuvable
-        </h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Page introuvable</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           La page que vous recherchez n'existe pas.
         </p>
@@ -77,47 +77,53 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RootComponent() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+const PUBLIC_ROUTES = ["/login", "/auth/callback"];
 
-  const isPublicRoute = pathname === "/login";
-  const isAdminRoute = pathname.startsWith("/admin");
+function RootComponent() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
   return (
     <AuthProvider>
       <AppProvider>
-      {isPublicRoute ? (
-          <Outlet />
-        ) : (
-          <ProtectedRoute>
-            <AdminAccessGuard isAdminRoute={isAdminRoute}>
-              <Outlet />
-            </AdminAccessGuard>
-          </ProtectedRoute>
-        )}
+        <FavoritesProvider>
+          {isPublicRoute ? (
+            <Outlet />
+          ) : (
+            <ProtectedRoute>
+              <RoleGuard pathname={pathname}>
+                <Outlet />
+              </RoleGuard>
+            </ProtectedRoute>
+          )}
+          <Toaster position="bottom-right" richColors closeButton />
+        </FavoritesProvider>
       </AppProvider>
     </AuthProvider>
   );
 }
 
-function AdminAccessGuard({
-  isAdminRoute,
-  children,
-}: {
-  isAdminRoute: boolean;
-  children: React.ReactNode;
-}) {
+/**
+ * Garde d'interface par route. La sécurité effective est assurée par la base
+ * (RLS) et les routes serveur ; ce garde évite seulement d'afficher un écran
+ * inutilisable.
+ */
+function RoleGuard({ pathname, children }: { pathname: string; children: React.ReactNode }) {
   const { profile } = useAuth();
-
-  if (isAdminRoute && !["admin", "super_admin"].includes(profile?.role ?? "")) {
+  const role = profile?.role;
+  const needsAdmin = pathname.startsWith("/admin");
+  const needsTickets = pathname.startsWith("/tickets");
+  const allowed =
+    (!needsAdmin ||
+      ["user.manage", "model.manage", "prompt.manage", "workflow.manage", "agent.manage"].some(
+        (p) => hasPermission(role, p as never),
+      )) &&
+    (!needsTickets || hasPermission(role, "ticket.manage"));
+  if (!allowed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Accès réservé
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground">Accès réservé</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Cette section est réservée aux administrateurs CHANTAL.
           </p>
@@ -131,6 +137,5 @@ function AdminAccessGuard({
       </div>
     );
   }
-
   return <>{children}</>;
 }

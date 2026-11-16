@@ -11,13 +11,22 @@ interface Props {
 
 function toHtml(text: string): string {
   if (/<[a-z][\s\S]*>/i.test(text)) return text; // déjà du HTML
-  return text.split("\n").map(line => `<p>${line}</p>`).join("");
+  return text
+    .split("\n")
+    .map((line) => `<p>${line}</p>`)
+    .join("");
 }
 
 function ToolbarBtn({
-  active, onClick, children, title,
+  active,
+  onClick,
+  children,
+  title,
 }: {
-  active?: boolean; onClick: () => void; children: React.ReactNode; title?: string;
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  title?: string;
 }) {
   return (
     <button
@@ -36,17 +45,14 @@ function ToolbarBtn({
 }
 
 export function RichTextEditor({ content, onChange }: Props) {
-  const [imgOpen,   setImgOpen]   = useState(false);
-  const [imgUrl,    setImgUrl]    = useState("");
+  const [imgOpen, setImgOpen] = useState(false);
+  const [imgUrl, setImgUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Image.configure({ inline: false, allowBase64: true }),
-    ],
+    extensions: [StarterKit, Image.configure({ inline: false, allowBase64: true })],
     content: toHtml(content),
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
@@ -89,20 +95,35 @@ export function RichTextEditor({ content, onChange }: Props) {
 
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-background">
-
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-border bg-muted/20">
-        <ToolbarBtn active={editor.isActive("bold")}   onClick={() => editor.chain().focus().toggleBold().run()}   title="Gras (Ctrl+B)">
+        <ToolbarBtn
+          active={editor.isActive("bold")}
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          title="Gras (Ctrl+B)"
+        >
           <strong>B</strong>
         </ToolbarBtn>
-        <ToolbarBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italique (Ctrl+I)">
+        <ToolbarBtn
+          active={editor.isActive("italic")}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="Italique (Ctrl+I)"
+        >
           <em>I</em>
         </ToolbarBtn>
-        <ToolbarBtn active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title="Barré">
+        <ToolbarBtn
+          active={editor.isActive("strike")}
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          title="Barré"
+        >
           <s>S</s>
         </ToolbarBtn>
         <div className="w-px h-3.5 bg-border mx-0.5" />
-        <ToolbarBtn active={imgOpen} onClick={() => setImgOpen(o => !o)} title="Insérer une image">
+        <ToolbarBtn
+          active={imgOpen}
+          onClick={() => setImgOpen((o) => !o)}
+          title="Insérer une image"
+        >
           <ImageIcon className="w-3.5 h-3.5" />
         </ToolbarBtn>
       </div>
@@ -114,32 +135,56 @@ export function RichTextEditor({ content, onChange }: Props) {
             <input
               autoFocus
               value={imgUrl}
-              onChange={e => setImgUrl(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); insertUrl(); } }}
+              onChange={(e) => setImgUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  insertUrl();
+                }
+              }}
               placeholder="https://… (URL de l'image)"
               className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-brand/40"
             />
-            <button type="button" onClick={insertUrl}
-              className="px-2.5 py-1.5 rounded-md bg-brand text-white text-xs hover:bg-brand/90 shrink-0">
+            <button
+              type="button"
+              onClick={insertUrl}
+              className="px-2.5 py-1.5 rounded-md bg-brand text-white text-xs hover:bg-brand/90 shrink-0"
+            >
               Insérer
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+            >
               <Upload className="w-3 h-3" />
               {uploading ? "Upload…" : "Depuis le disque"}
             </button>
-            <button type="button" onClick={() => { setImgOpen(false); setUploadErr(null); }}
-              className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={() => {
+                setImgOpen(false);
+                setUploadErr(null);
+              }}
+              className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-          {uploadErr && (
-            <p className="text-[0.7rem] text-destructive">{uploadErr}</p>
-          )}
+          {uploadErr && <p className="text-[0.7rem] text-destructive">{uploadErr}</p>}
         </div>
       )}
 

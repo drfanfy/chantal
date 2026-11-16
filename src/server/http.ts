@@ -16,14 +16,20 @@ export class ApiError extends Error {
   }
 }
 
-export const forbidden = (msg = "Action non autorisée pour votre rôle") => new ApiError(403, "forbidden", msg);
+export const forbidden = (msg = "Action non autorisée pour votre rôle") =>
+  new ApiError(403, "forbidden", msg);
 export const notFound = (msg = "Ressource introuvable") => new ApiError(404, "not_found", msg);
-export const badRequest = (msg: string, details?: unknown) => new ApiError(400, "bad_request", msg, details);
+export const badRequest = (msg: string, details?: unknown) =>
+  new ApiError(400, "bad_request", msg, details);
 
 export function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...headers,
+    },
   });
 }
 
@@ -46,13 +52,18 @@ export function handle(fn: (ctx: { request: Request }) => Promise<Response>) {
   };
 }
 
-export async function readBody<T>(request: Request, schema: z.ZodType<T>, maxBytes = 1_000_000): Promise<T> {
+export async function readBody<S extends z.ZodTypeAny>(
+  request: Request,
+  schema: S,
+  maxBytes = 1_000_000,
+): Promise<z.output<S>> {
   const len = Number(request.headers.get("content-length") ?? 0);
   if (len > maxBytes) throw new ApiError(413, "payload_too_large", "Requête trop volumineuse");
   let raw: unknown;
   try {
     const text = await request.text();
-    if (text.length > maxBytes) throw new ApiError(413, "payload_too_large", "Requête trop volumineuse");
+    if (text.length > maxBytes)
+      throw new ApiError(413, "payload_too_large", "Requête trop volumineuse");
     raw = text ? JSON.parse(text) : {};
   } catch (e) {
     if (e instanceof ApiError) throw e;

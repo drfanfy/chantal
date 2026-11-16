@@ -24,11 +24,19 @@ export function toAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageP
     // Documents et images avant le texte (recommandation fournisseur)
     for (const p of m.content) {
       if (p.type === "file") {
-        blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: p.base64 }, title: p.filename });
+        blocks.push({
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: p.base64 },
+          title: p.filename,
+        });
       } else if (p.type === "image") {
         blocks.push({
           type: "image",
-          source: { type: "base64", media_type: p.mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data: p.base64 },
+          source: {
+            type: "base64",
+            media_type: p.mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+            data: p.base64,
+          },
         });
       }
     }
@@ -41,7 +49,14 @@ export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",
   label: "Anthropic (Claude)",
   description: "API Claude officielle via le SDK @anthropic-ai/sdk (streaming, images, PDF).",
-  supported: { text: true, streaming: true, vision: true, files: true, structured_output: false, tools: false },
+  supported: {
+    text: true,
+    streaming: true,
+    vision: true,
+    files: true,
+    structured_output: false,
+    tools: false,
+  },
   supportsTemperature: false,
   requiresBaseUrl: false,
   officialHosts: ["api.anthropic.com"],
@@ -71,7 +86,8 @@ export const anthropicAdapter: ProviderAdapter = {
         if (event.type === "message_start") {
           const u = event.message.usage;
           cachedInputTokens = u.cache_read_input_tokens ?? 0;
-          inputTokens = (u.input_tokens ?? 0) + cachedInputTokens + (u.cache_creation_input_tokens ?? 0);
+          inputTokens =
+            (u.input_tokens ?? 0) + cachedInputTokens + (u.cache_creation_input_tokens ?? 0);
           outputTokens = u.output_tokens ?? undefined;
         } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
           yield { type: "text", text: event.delta.text };
@@ -89,11 +105,19 @@ export const anthropicAdapter: ProviderAdapter = {
       if (e instanceof ProviderError) throw e;
       if (req.signal.aborted) throw new ProviderError("cancelled");
       if (e instanceof Anthropic.APIError && typeof e.status === "number") {
-        throw new ProviderError(errorCodeFromStatus(e.status), e.status, sanitizeDetail(e.message, [conn.apiKey]));
+        throw new ProviderError(
+          errorCodeFromStatus(e.status),
+          e.status,
+          sanitizeDetail(e.message, [conn.apiKey]),
+        );
       }
       if (e instanceof Anthropic.APIConnectionTimeoutError) throw new ProviderError("timeout");
       if (e instanceof Anthropic.APIConnectionError) throw new ProviderError("network");
-      throw new ProviderError("unknown", undefined, sanitizeDetail(e instanceof Error ? e.message : String(e), [conn.apiKey]));
+      throw new ProviderError(
+        "unknown",
+        undefined,
+        sanitizeDetail(e instanceof Error ? e.message : String(e), [conn.apiKey]),
+      );
     }
   },
 };

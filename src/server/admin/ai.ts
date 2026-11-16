@@ -9,7 +9,16 @@ import type { AuthContext } from "../auth";
 import { serverConfig } from "../env";
 import { ApiError } from "../http";
 import { describeAdapters, effectiveCapabilities } from "../ai/registry";
-import { CONNECTION_COLUMNS, MODEL_COLUMNS, connectionStatus, providerErrorToApi, resolveModel, runCompletion, type ConnectionRow, type ModelRow } from "../ai/gateway";
+import {
+  CONNECTION_COLUMNS,
+  MODEL_COLUMNS,
+  connectionStatus,
+  providerErrorToApi,
+  resolveModel,
+  runCompletion,
+  type ConnectionRow,
+  type ModelRow,
+} from "../ai/gateway";
 import { ProviderError, sanitizeDetail } from "../ai/types";
 
 export async function getAiStatus(ctx: AuthContext) {
@@ -18,15 +27,26 @@ export async function getAiStatus(ctx: AuthContext) {
     ctx.admin.from("ai_provider_connections").select(CONNECTION_COLUMNS),
     ctx.admin.from("ai_models").select(`${MODEL_COLUMNS}, provider`),
   ]);
-  const connections = ((conns ?? []) as ConnectionRow[]).map((c) => ({ id: c.id, adapter: c.adapter, ...connectionStatus(c, cfg) }));
+  const connections = ((conns ?? []) as ConnectionRow[]).map((c) => ({
+    id: c.id,
+    adapter: c.adapter,
+    ...connectionStatus(c, cfg),
+  }));
   const byId = new Map(((conns ?? []) as ConnectionRow[]).map((c) => [c.id, c]));
   return {
     adapters: describeAdapters().filter((a) => a.id !== "mock" || cfg.aiEnableMockProvider),
     connections,
     models: ((models ?? []) as ModelRow[]).map((m) => {
       const conn = m.connection_id ? byId.get(m.connection_id) : undefined;
-      const status = conn ? connectionStatus(conn, cfg) : { configured: false, reason: "Aucune connexion" };
-      return { id: m.id, configured: status.configured, reason: status.reason, effectiveCapabilities: effectiveCapabilities(conn?.adapter ?? "", m.capabilities) };
+      const status = conn
+        ? connectionStatus(conn, cfg)
+        : { configured: false, reason: "Aucune connexion" };
+      return {
+        id: m.id,
+        configured: status.configured,
+        reason: status.reason,
+        effectiveCapabilities: effectiveCapabilities(conn?.adapter ?? "", m.capabilities),
+      };
     }),
     environment: {
       appEnv: cfg.appEnv,
@@ -55,7 +75,10 @@ export async function testModel(ctx: AuthContext, modelId: string) {
       admin: ctx.admin,
       userId: ctx.userId,
       resolved,
-      request: { messages: [{ role: "user", content: "Test de connexion CHANTAL. Réponds uniquement : OK" }], maxOutputTokens: 512 },
+      request: {
+        messages: [{ role: "user", content: "Test de connexion CHANTAL. Réponds uniquement : OK" }],
+        maxOutputTokens: 512,
+      },
       meta: { source: "admin_test" },
       timeoutMs: 60_000,
       skipLimits: true,
@@ -70,9 +93,15 @@ export async function testModel(ctx: AuthContext, modelId: string) {
     if (e instanceof ApiError && e.code === "model_not_found") throw e;
   }
   const latency = Date.now() - started;
-  const patch = { last_test_at: new Date().toISOString(), last_test_status: ok ? "success" : "error", last_test_error: error, last_test_latency_ms: latency };
+  const patch = {
+    last_test_at: new Date().toISOString(),
+    last_test_status: ok ? "success" : "error",
+    last_test_error: error,
+    last_test_latency_ms: latency,
+  };
   await ctx.admin.from("ai_models").update(patch).eq("id", modelId);
-  if (connectionId) await ctx.admin.from("ai_provider_connections").update(patch).eq("id", connectionId);
+  if (connectionId)
+    await ctx.admin.from("ai_provider_connections").update(patch).eq("id", connectionId);
   await ctx.admin.from("admin_audit_log").insert({
     actor_id: ctx.userId,
     actor_role: ctx.role,
@@ -82,6 +111,10 @@ export async function testModel(ctx: AuthContext, modelId: string) {
     summary: ok ? "Test réussi" : "Test en échec",
     changes: { latency_ms: latency, error },
   });
-  const { data: model } = await ctx.admin.from("ai_models").select("id, last_test_at, last_test_status, last_test_error, last_test_latency_ms").eq("id", modelId).single();
+  const { data: model } = await ctx.admin
+    .from("ai_models")
+    .select("id, last_test_at, last_test_status, last_test_error, last_test_latency_ms")
+    .eq("id", modelId)
+    .single();
   return { ok, error, reply, latencyMs: latency, model };
 }

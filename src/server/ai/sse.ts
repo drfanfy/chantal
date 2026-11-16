@@ -1,5 +1,8 @@
 /** Lecture d'un flux Server-Sent Events : renvoie le contenu de chaque ligne `data:`. */
-export async function* readSseData(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<string> {
+export async function* readSseData(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

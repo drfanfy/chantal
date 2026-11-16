@@ -49,7 +49,10 @@ export interface TestDb {
 }
 
 export function migrationFiles(): string[] {
-  return fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+  return fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
 }
 
 export interface CreateOptions {
@@ -67,12 +70,18 @@ export async function createTestDb(opts: CreateOptions = {}): Promise<TestDb> {
       await db.exec(sql);
     } catch (e) {
       const pos = Number((e as { position?: string }).position ?? 0);
-      const ctx = pos ? ` … près de : ${sql.slice(Math.max(0, pos - 120), pos + 60).replace(/\s+/g, " ")}` : "";
+      const ctx = pos
+        ? ` … près de : ${sql.slice(Math.max(0, pos - 120), pos + 60).replace(/\s+/g, " ")}`
+        : "";
       throw new Error(`Migration ${file} : ${(e as Error).message}${ctx}`);
     }
   }
 
-  async function withRole<T>(role: string, claims: Record<string, unknown>, fn: (tx: Transaction) => Promise<T>) {
+  async function withRole<T>(
+    role: string,
+    claims: Record<string, unknown>,
+    fn: (tx: Transaction) => Promise<T>,
+  ) {
     return db.transaction(async (tx) => {
       await tx.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify(claims)]);
       await tx.exec(`set local role ${role}`);
@@ -85,9 +94,10 @@ export async function createTestDb(opts: CreateOptions = {}): Promise<TestDb> {
     async createUser(email, role, active = true) {
       const id = randomUUID();
       await db.query(`insert into auth.users(id, email) values ($1, $2)`, [id, email]);
-      await db.query(`update public.profiles set role = $2, is_active = $3, full_name = $4, provisioning_source = 'admin' where id = $1`, [
-        id, role, active, email.split("@")[0],
-      ]);
+      await db.query(
+        `update public.profiles set role = $2, is_active = $3, full_name = $4, provisioning_source = 'admin' where id = $1`,
+        [id, role, active, email.split("@")[0]],
+      );
       return id;
     },
     asUser: (userId, fn) => withRole("authenticated", { sub: userId, role: "authenticated" }, fn),

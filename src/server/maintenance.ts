@@ -14,14 +14,20 @@ export async function handleMaintenance(request: Request): Promise<Response> {
   const cfg = serverConfig();
   const given = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const expected = cfg.cronSecret ?? "";
-  const ok = expected.length >= 16 && given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+  const ok =
+    expected.length >= 16 &&
+    given.length === expected.length &&
+    timingSafeEqual(Buffer.from(given), Buffer.from(expected));
   if (!ok) throw new ApiError(401, "unauthorized", "Non autorisé");
   const admin = getAdminClient();
   const { data: expired } = await admin.rpc("expire_stale_workflow_runs");
   const staleBefore = new Date(Date.now() - cfg.aiRequestTimeoutMs - 5 * 60_000).toISOString();
   const { count: abandoned } = await admin
     .from("ai_usage_events")
-    .update({ status: "error", error_code: "abandoned", finished_at: new Date().toISOString() }, { count: "exact" })
+    .update(
+      { status: "error", error_code: "abandoned", finished_at: new Date().toISOString() },
+      { count: "exact" },
+    )
     .eq("status", "started")
     .lt("occurred_at", staleBefore);
   const { data: purged } = await admin.rpc("purge_expired_data");

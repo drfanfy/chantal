@@ -31,7 +31,11 @@ export function stringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function renderTemplate(template: string, scope: TemplateScope, options: RenderOptions = {}) {
+export function renderTemplate(
+  template: string,
+  scope: TemplateScope,
+  options: RenderOptions = {},
+) {
   const missing = new Set<string>();
   const text = template.replace(REF, (_m, path: string) => {
     const value = lookup(scope, path);

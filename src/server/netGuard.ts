@@ -55,7 +55,8 @@ export interface GuardOptions {
   resolve?: (host: string) => Promise<string[]>;
 }
 
-const defaultResolve = async (host: string) => (await lookup(host, { all: true })).map((r) => r.address);
+const defaultResolve = async (host: string) =>
+  (await lookup(host, { all: true })).map((r) => r.address);
 
 export async function assertSafeUrl(rawUrl: string, opts: GuardOptions): Promise<URL> {
   let url: URL;
@@ -64,13 +65,25 @@ export async function assertSafeUrl(rawUrl: string, opts: GuardOptions): Promise
   } catch {
     throw new ApiError(400, "invalid_url", "URL invalide");
   }
-  if (url.protocol !== "https:") throw new ApiError(400, "blocked_url", "Seules les URL https sont autorisées");
-  if (url.username || url.password) throw new ApiError(400, "blocked_url", "Identifiants interdits dans l'URL");
-  if (url.port && url.port !== "443") throw new ApiError(400, "blocked_url", "Port non autorisé (443 uniquement)");
+  if (url.protocol !== "https:")
+    throw new ApiError(400, "blocked_url", "Seules les URL https sont autorisées");
+  if (url.username || url.password)
+    throw new ApiError(400, "blocked_url", "Identifiants interdits dans l'URL");
+  if (url.port && url.port !== "443")
+    throw new ApiError(400, "blocked_url", "Port non autorisé (443 uniquement)");
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (isIP(host)) throw new ApiError(400, "blocked_url", "Adresse IP littérale interdite : utilisez un nom d'hôte");
+  if (isIP(host))
+    throw new ApiError(
+      400,
+      "blocked_url",
+      "Adresse IP littérale interdite : utilisez un nom d'hôte",
+    );
   if (!hostAllowed(host, opts.allowlist)) {
-    throw new ApiError(400, "host_not_allowed", `Hôte « ${host} » absent de la liste blanche configurée par la DSI`);
+    throw new ApiError(
+      400,
+      "host_not_allowed",
+      `Hôte « ${host} » absent de la liste blanche configurée par la DSI`,
+    );
   }
   let addresses: string[];
   try {
@@ -79,7 +92,11 @@ export async function assertSafeUrl(rawUrl: string, opts: GuardOptions): Promise
     throw new ApiError(502, "dns_error", `Résolution DNS impossible pour « ${host} »`);
   }
   if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
-    throw new ApiError(400, "blocked_url", `« ${host} » résout vers une adresse interne : appel refusé`);
+    throw new ApiError(
+      400,
+      "blocked_url",
+      `« ${host} » résout vers une adresse interne : appel refusé`,
+    );
   }
   return url;
 }
@@ -96,7 +113,11 @@ export async function safeFetch(
   try {
     const res = await fetch(url, { ...init, redirect: "manual", signal: ctrl.signal });
     if (res.status >= 300 && res.status < 400) {
-      throw new ApiError(502, "redirect_blocked", "Redirection refusée par la politique de sécurité");
+      throw new ApiError(
+        502,
+        "redirect_blocked",
+        "Redirection refusée par la politique de sécurité",
+      );
     }
     const reader = res.body?.getReader();
     const chunks: Uint8Array[] = [];
@@ -117,7 +138,8 @@ export async function safeFetch(
     return { status: res.status, headers: res.headers, text };
   } catch (e) {
     if (e instanceof ApiError) throw e;
-    if (ctrl.signal.aborted) throw new ApiError(504, "timeout", "Délai dépassé pour l'appel externe");
+    if (ctrl.signal.aborted)
+      throw new ApiError(504, "timeout", "Délai dépassé pour l'appel externe");
     throw new ApiError(502, "network_error", "Appel externe impossible");
   } finally {
     clearTimeout(timer);

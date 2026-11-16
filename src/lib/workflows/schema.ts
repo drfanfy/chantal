@@ -9,7 +9,9 @@ import { z } from "zod";
 import { templateRefs } from "./template";
 
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
-const keySchema = z.string().regex(KEY, "Identifiant : minuscules, chiffres et _ (40 car. max), commence par une lettre");
+const keySchema = z
+  .string()
+  .regex(KEY, "Identifiant : minuscules, chiffres et _ (40 car. max), commence par une lettre");
 
 export const INPUT_TYPES = ["text", "textarea", "number", "select", "date", "boolean"] as const;
 
@@ -29,7 +31,11 @@ export const inputFieldSchema = z
   })
   .superRefine((f, ctx) => {
     if (f.type === "select" && (!f.options || f.options.length === 0)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Une liste déroulante doit avoir des options", path: ["options"] });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Une liste déroulante doit avoir des options",
+        path: ["options"],
+      });
     }
     if (f.min !== undefined && f.max !== undefined && f.min > f.max) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "min > max", path: ["min"] });
@@ -114,7 +120,11 @@ export const transformStepSchema = z.object({
   type: z.literal("transform"),
   operation: z.enum(TRANSFORM_OPERATIONS),
   input: z.string().max(50000).default(""),
-  path: z.string().regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/).max(200).optional(),
+  path: z
+    .string()
+    .regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/)
+    .max(200)
+    .optional(),
   length: z.number().int().min(1).max(200000).optional(),
   outputVar: keySchema,
 });
@@ -141,11 +151,20 @@ export const httpStepSchema = z.object({
     .refine((p) => !p.includes("..") && !p.includes("//") && !p.includes("@"), "Chemin interdit")
     .default(""),
   body: z.string().max(50000).default(""),
-  responsePath: z.string().regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/).max(200).optional(),
+  responsePath: z
+    .string()
+    .regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/)
+    .max(200)
+    .optional(),
   outputVar: keySchema,
 });
 
-export const stepSchema = z.discriminatedUnion("type", [llmStepSchema, transformStepSchema, conditionStepSchema, httpStepSchema]);
+export const stepSchema = z.discriminatedUnion("type", [
+  llmStepSchema,
+  transformStepSchema,
+  conditionStepSchema,
+  httpStepSchema,
+]);
 export type WorkflowStep = z.infer<typeof stepSchema>;
 export type LlmStep = z.infer<typeof llmStepSchema>;
 export type HttpStep = z.infer<typeof httpStepSchema>;
@@ -158,14 +177,24 @@ export const workflowDefinitionSchema = z
     output: z.object({
       template: z.string().trim().min(1, "Gabarit de sortie obligatoire").max(50000),
       format: z.enum(["markdown", "text", "json"]).default("markdown"),
-      filename: z.string().regex(/^[\w\- ]{1,80}$/).optional(),
+      filename: z
+        .string()
+        .regex(/^[\w\- ]{1,80}$/)
+        .optional(),
     }),
-    limits: z.object({ timeoutSeconds: z.number().int().min(10).max(290).default(240) }).default({ timeoutSeconds: 240 }),
+    limits: z
+      .object({ timeoutSeconds: z.number().int().min(10).max(290).default(240) })
+      .default({ timeoutSeconds: 240 }),
   })
   .superRefine((def, ctx) => {
     const inputKeys = new Set<string>();
     def.inputs.forEach((f, i) => {
-      if (inputKeys.has(f.key)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Champ « ${f.key} » en double`, path: ["inputs", i, "key"] });
+      if (inputKeys.has(f.key))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Champ « ${f.key} » en double`,
+          path: ["inputs", i, "key"],
+        });
       inputKeys.add(f.key);
     });
     const stepIds = new Set<string>();
@@ -174,11 +203,21 @@ export const workflowDefinitionSchema = z
       for (const ref of templateRefs(text ?? "")) {
         const [ns, key] = ref.split(".");
         const ok = (ns === "inputs" && inputKeys.has(key)) || (ns === "vars" && vars.has(key));
-        if (!ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Référence inconnue ou pas encore calculée : {{${ref}}}`, path });
+        if (!ok)
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Référence inconnue ou pas encore calculée : {{${ref}}}`,
+            path,
+          });
       }
     };
     def.steps.forEach((s, i) => {
-      if (stepIds.has(s.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Étape « ${s.id} » en double`, path: ["steps", i, "id"] });
+      if (stepIds.has(s.id))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Étape « ${s.id} » en double`,
+          path: ["steps", i, "id"],
+        });
       stepIds.add(s.id);
       if (s.when) {
         checkRefs(s.when.left, ["steps", i, "when", "left"]);
@@ -186,14 +225,29 @@ export const workflowDefinitionSchema = z
       }
       switch (s.type) {
         case "llm":
-          if (!s.modelId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choisissez un modèle", path: ["steps", i, "modelId"] });
+          if (!s.modelId)
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Choisissez un modèle",
+              path: ["steps", i, "modelId"],
+            });
           checkRefs(s.system, ["steps", i, "system"]);
           checkRefs(s.prompt, ["steps", i, "prompt"]);
           break;
         case "transform":
           checkRefs(s.input, ["steps", i, "input"]);
-          if (s.operation === "json_get" && !s.path) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Chemin JSON obligatoire", path: ["steps", i, "path"] });
-          if (s.operation === "truncate" && !s.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Longueur obligatoire", path: ["steps", i, "length"] });
+          if (s.operation === "json_get" && !s.path)
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Chemin JSON obligatoire",
+              path: ["steps", i, "path"],
+            });
+          if (s.operation === "truncate" && !s.length)
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Longueur obligatoire",
+              path: ["steps", i, "length"],
+            });
           break;
         case "condition":
           checkRefs(s.condition.left, ["steps", i, "condition", "left"]);
@@ -246,7 +300,8 @@ export function validateInputs(fields: InputField[], raw: Record<string, unknown
         else values[f.key] = String(v);
         break;
       case "date":
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v)) || Number.isNaN(Date.parse(String(v)))) errors[f.key] = "Date invalide (AAAA-MM-JJ)";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v)) || Number.isNaN(Date.parse(String(v))))
+          errors[f.key] = "Date invalide (AAAA-MM-JJ)";
         else values[f.key] = String(v);
         break;
       default: {

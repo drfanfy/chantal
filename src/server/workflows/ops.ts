@@ -32,24 +32,39 @@ export function evaluateCondition(cond: Condition, scope: TemplateScope): boolea
       const a = toNumber(left);
       const b = toNumber(right);
       if (a === null || b === null) return false;
-      return cond.operator === "gt" ? a > b : cond.operator === "gte" ? a >= b : cond.operator === "lt" ? a < b : a <= b;
+      return cond.operator === "gt"
+        ? a > b
+        : cond.operator === "gte"
+          ? a >= b
+          : cond.operator === "lt"
+            ? a < b
+            : a <= b;
     }
   }
 }
 
 export class StepError extends Error {
-  constructor(public code: string, message: string) {
+  constructor(
+    public code: string,
+    message: string,
+  ) {
     super(message);
   }
 }
 
-export function runTransform(step: Extract<WorkflowStep, { type: "transform" }>, scope: TemplateScope): unknown {
+export function runTransform(
+  step: Extract<WorkflowStep, { type: "transform" }>,
+  scope: TemplateScope,
+): unknown {
   const raw = renderTemplate(step.input ?? "", scope).text;
   switch (step.operation) {
     case "template":
       return raw;
     case "trim":
-      return raw.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+      return raw
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     case "uppercase":
       return raw.toUpperCase();
     case "lowercase":
@@ -57,7 +72,10 @@ export function runTransform(step: Extract<WorkflowStep, { type: "transform" }>,
     case "truncate":
       return raw.length > (step.length ?? raw.length) ? raw.slice(0, step.length) + "…" : raw;
     case "split_lines":
-      return raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      return raw
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
     case "join_lines": {
       try {
         const parsed: unknown = JSON.parse(raw);
@@ -72,10 +90,14 @@ export function runTransform(step: Extract<WorkflowStep, { type: "transform" }>,
       try {
         parsed = JSON.parse(extractJson(raw));
       } catch {
-        throw new StepError("invalid_json", `L'entrée de l'étape « ${step.name} » n'est pas un JSON valide`);
+        throw new StepError(
+          "invalid_json",
+          `L'entrée de l'étape « ${step.name} » n'est pas un JSON valide`,
+        );
       }
       const v = lookup({ root: parsed } as TemplateScope, `root.${step.path}`);
-      if (v === undefined) throw new StepError("json_path_missing", `Champ « ${step.path} » absent du JSON`);
+      if (v === undefined)
+        throw new StepError("json_path_missing", `Champ « ${step.path} » absent du JSON`);
       return v;
     }
   }

@@ -139,3 +139,7 @@ dist
 .vercel
 dist
 node_modules
+
+.env.local
+.env.*.local
+!.env.example

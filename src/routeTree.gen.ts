@@ -17,6 +17,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatIndexRouteImport } from './routes/chat.index'
 import { Route as ChatConversationIdRouteImport } from './routes/chat.$conversationId'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiWorkflowsRunRouteImport } from './routes/api.workflows.run'
 import { Route as ApiCronMaintenanceRouteImport } from './routes/api.cron.maintenance'
@@ -65,6 +66,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
 const ChatConversationIdRoute = ChatConversationIdRouteImport.update({
   id: '/chat/$conversationId',
   path: '/chat/$conversationId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
   '/api/chat': typeof ApiChatRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat/': typeof ChatIndexRoute
   '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
   '/api/chat': typeof ApiChatRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat': typeof ChatIndexRoute
   '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
   '/api/chat': typeof ApiChatRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat/': typeof ChatIndexRoute
   '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/tickets'
     | '/api/chat'
+    | '/auth/callback'
     | '/chat/$conversationId'
     | '/chat/'
     | '/api/admin/ai-status'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/tickets'
     | '/api/chat'
+    | '/auth/callback'
     | '/chat/$conversationId'
     | '/chat'
     | '/api/admin/ai-status'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/tickets'
     | '/api/chat'
+    | '/auth/callback'
     | '/chat/$conversationId'
     | '/chat/'
     | '/api/admin/ai-status'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   TicketsRoute: typeof TicketsRoute
   ApiChatRoute: typeof ApiChatRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   ChatConversationIdRoute: typeof ChatConversationIdRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ApiAdminAiStatusRoute: typeof ApiAdminAiStatusRoute
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/chat/$conversationId'
       fullPath: '/chat/$conversationId'
       preLoaderRoute: typeof ChatConversationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -383,6 +403,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   TicketsRoute: TicketsRoute,
   ApiChatRoute: ApiChatRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   ChatConversationIdRoute: ChatConversationIdRoute,
   ChatIndexRoute: ChatIndexRoute,
   ApiAdminAiStatusRoute: ApiAdminAiStatusRoute,

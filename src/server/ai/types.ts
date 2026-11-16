@@ -6,7 +6,14 @@
 export const ADAPTER_IDS = ["openai", "anthropic", "google", "openai_compatible", "mock"] as const;
 export type AdapterId = (typeof ADAPTER_IDS)[number];
 
-export const CAPABILITIES = ["text", "streaming", "vision", "files", "structured_output", "tools"] as const;
+export const CAPABILITIES = [
+  "text",
+  "streaming",
+  "vision",
+  "files",
+  "structured_output",
+  "tools",
+] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 export type CapabilityMap = Partial<Record<Capability, boolean>>;
 
@@ -111,6 +118,9 @@ export function errorCodeFromStatus(status: number): ProviderErrorCode {
 export function sanitizeDetail(text: string, secrets: (string | undefined)[] = []): string {
   let out = text;
   for (const s of secrets) if (s && s.length >= 6) out = out.split(s).join("[masqué]");
-  out = out.replace(/(sk-[A-Za-z0-9_-]{6,}|AIza[0-9A-Za-z_-]{10,}|gsk_[A-Za-z0-9]{6,}|Bearer\s+[A-Za-z0-9._-]{8,})/g, "[masqué]");
+  out = out.replace(
+    /(sk-[A-Za-z0-9_-]{6,}|AIza[0-9A-Za-z_-]{10,}|gsk_[A-Za-z0-9]{6,}|Bearer\s+[A-Za-z0-9._-]{8,})/g,
+    "[masqué]",
+  );
   return out.slice(0, 500);
 }

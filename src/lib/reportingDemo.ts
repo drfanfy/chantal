@@ -1,0 +1,117 @@
+/**
+ * Jeu de données FICTIF du reporting — mode démonstration uniquement
+ * (paramètre app_settings.reporting_demo_mode, désactivé par défaut).
+ * Repris des chiffres du POC ; ne doit jamais être confondu avec des usages réels.
+ */
+import type { UsageReport } from "@/components/AdminDashboard";
+
+export function demoReport(from: string, to: string): UsageReport {
+  return {
+    period: { from, to },
+    instrumentation_since: null,
+    kpis: {
+      active_users: 47,
+      requests: 1284,
+      success: 1251,
+      errors: 33,
+      cancelled: 0,
+      latency_avg_ms: 820,
+      latency_p95_ms: 2400,
+      duration_avg_ms: 6100,
+      input_tokens: 2_150_000,
+      output_tokens: 640_000,
+      requests_with_tokens: 1251,
+      estimated_cost: 642,
+      requests_with_cost: 1251,
+      currencies: ["USD"],
+      conversations_created: 310,
+      workflow_runs: 289,
+      workflow_runs_succeeded: 276,
+      workflow_runs_failed: 13,
+      workflow_retries: 5,
+    },
+    by_model: [
+      {
+        model_id: "demo-1",
+        name: "Claude",
+        provider: "anthropic",
+        requests: 482,
+        errors: 9,
+        input_tokens: 800000,
+        output_tokens: 240000,
+        requests_with_tokens: 482,
+        estimated_cost: 214,
+        requests_with_cost: 482,
+        latency_avg_ms: 900,
+      },
+      {
+        model_id: "demo-2",
+        name: "OpenAI",
+        provider: "openai",
+        requests: 396,
+        errors: 12,
+        input_tokens: 700000,
+        output_tokens: 200000,
+        requests_with_tokens: 396,
+        estimated_cost: 238,
+        requests_with_cost: 396,
+        latency_avg_ms: 750,
+      },
+      {
+        model_id: "demo-3",
+        name: "Gemini",
+        provider: "google",
+        requests: 255,
+        errors: 8,
+        input_tokens: 450000,
+        output_tokens: 140000,
+        requests_with_tokens: 255,
+        estimated_cost: 121,
+        requests_with_cost: 255,
+        latency_avg_ms: 700,
+      },
+    ],
+    by_provider: [],
+    by_agent: [
+      { agent_id: "a1", name: "Assistant rédaction", requests: 342, users: 38, errors: 4 },
+      { agent_id: "a2", name: "Analyse marketing", requests: 218, users: 29, errors: 3 },
+      { agent_id: "a3", name: "Comité Engagement", requests: 167, users: 18, errors: 2 },
+    ],
+    by_source: [
+      { source: "chat", requests: 995, errors: 20 },
+      { source: "workflow", requests: 289, errors: 13 },
+    ],
+    by_workflow: [
+      {
+        workflow_id: "w1",
+        name: "Veille SEO",
+        runs: 89,
+        succeeded: 85,
+        failed: 4,
+        retries: 2,
+        avg_duration_ms: 2100,
+        estimated_cost: 124,
+        requests_without_cost: 0,
+      },
+      {
+        workflow_id: "w2",
+        name: "Préparation Comité d'engagement",
+        runs: 67,
+        succeeded: 66,
+        failed: 1,
+        retries: 1,
+        avg_duration_ms: 3400,
+        estimated_cost: 198,
+        requests_without_cost: 0,
+      },
+    ],
+    daily: Array.from({ length: 14 }, (_, i) => ({
+      day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10),
+      requests: 60 + ((i * 37) % 50),
+      errors: i % 4,
+      active_users: 20 + (i % 9),
+      estimated_cost: 30 + ((i * 13) % 20),
+    })),
+    pricing_used: [],
+  };
+}

@@ -6,17 +6,24 @@ const M = "11111111-1111-4111-8111-111111111111";
 
 describe("gabarits", () => {
   it("remplace les références sans évaluer de code", () => {
-    const r = renderTemplate("Ville : {{inputs.ville}} / {{vars.x.y}} / {{constructor}} / {{ inputs.absent }}", {
-      inputs: { ville: "Lyon" },
-      vars: { x: { y: 3 } },
-    });
+    const r = renderTemplate(
+      "Ville : {{inputs.ville}} / {{vars.x.y}} / {{constructor}} / {{ inputs.absent }}",
+      {
+        inputs: { ville: "Lyon" },
+        vars: { x: { y: 3 } },
+      },
+    );
     expect(r.text).toBe("Ville : Lyon / 3 /  / ");
     expect(r.missing).toEqual(["constructor", "inputs.absent"]);
     expect(renderTemplate("{{a}}", { a: "${process.exit()}" }).text).toBe("${process.exit()}");
   });
 
   it("échappe pour JSON", () => {
-    const r = renderTemplate('{"q":"{{inputs.q}}"}', { inputs: { q: 'a"b\n' } }, { escape: "json" });
+    const r = renderTemplate(
+      '{"q":"{{inputs.q}}"}',
+      { inputs: { q: 'a"b\n' } },
+      { escape: "json" },
+    );
     expect(JSON.parse(r.text)).toEqual({ q: 'a"b\n' });
   });
 });
@@ -24,7 +31,16 @@ describe("gabarits", () => {
 describe("schéma de workflow", () => {
   const base = {
     inputs: [{ key: "ville", label: "Ville", type: "text", required: true }],
-    steps: [{ id: "a", type: "llm", name: "Analyse", modelId: M, prompt: "Analyse {{inputs.ville}}", outputVar: "analyse" }],
+    steps: [
+      {
+        id: "a",
+        type: "llm",
+        name: "Analyse",
+        modelId: M,
+        prompt: "Analyse {{inputs.ville}}",
+        outputVar: "analyse",
+      },
+    ],
     output: { template: "{{vars.analyse}}" },
   };
 
@@ -38,8 +54,22 @@ describe("schéma de workflow", () => {
     const bad = {
       ...base,
       steps: [
-        { id: "a", type: "llm", name: "A", modelId: null, prompt: "{{vars.b}} {{inputs.inconnu}}", outputVar: "x" },
-        { id: "a", type: "transform", name: "B", operation: "template", input: "{{vars.x}}", outputVar: "b" },
+        {
+          id: "a",
+          type: "llm",
+          name: "A",
+          modelId: null,
+          prompt: "{{vars.b}} {{inputs.inconnu}}",
+          outputVar: "x",
+        },
+        {
+          id: "a",
+          type: "transform",
+          name: "B",
+          operation: "template",
+          input: "{{vars.x}}",
+          outputVar: "b",
+        },
       ],
     };
     const r = workflowDefinitionSchema.safeParse(bad);
@@ -54,7 +84,9 @@ describe("schéma de workflow", () => {
   it("refuse un chemin HTTP sortant de l'URL de base", () => {
     const r = workflowDefinitionSchema.safeParse({
       ...base,
-      steps: [{ id: "h", type: "http", name: "H", connectionId: M, path: "/../admin", outputVar: "r" }],
+      steps: [
+        { id: "h", type: "http", name: "H", connectionId: M, path: "/../admin", outputVar: "r" },
+      ],
       output: { template: "{{vars.r}}" },
     });
     expect(r.success).toBe(false);
@@ -74,6 +106,10 @@ describe("schéma de workflow", () => {
       lots: "Minimum 1",
       type: "Valeur non autorisée",
     });
-    expect(validateInputs(fields, { ville: "Lyon", lots: "12,5", type: "T2" }).values).toEqual({ ville: "Lyon", lots: 12.5, type: "T2" });
+    expect(validateInputs(fields, { ville: "Lyon", lots: "12,5", type: "T2" }).values).toEqual({
+      ville: "Lyon",
+      lots: 12.5,
+      type: "T2",
+    });
   });
 });

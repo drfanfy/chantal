@@ -20,12 +20,16 @@ export interface UsageTokens {
   cachedInputTokens?: number;
 }
 
-export function estimateCost(pricing: PricingRow | null | undefined, usage: UsageTokens): number | null {
+export function estimateCost(
+  pricing: PricingRow | null | undefined,
+  usage: UsageTokens,
+): number | null {
   if (!pricing) return null;
   if (usage.inputTokens === undefined || usage.outputTokens === undefined) return null;
   const inRate = Number(pricing.input_per_mtok);
   const outRate = Number(pricing.output_per_mtok);
-  const cachedRate = pricing.cached_input_per_mtok === null ? inRate : Number(pricing.cached_input_per_mtok);
+  const cachedRate =
+    pricing.cached_input_per_mtok === null ? inRate : Number(pricing.cached_input_per_mtok);
   if (![inRate, outRate, cachedRate].every(Number.isFinite)) return null;
   const cached = Math.min(usage.cachedInputTokens ?? 0, usage.inputTokens);
   const fresh = usage.inputTokens - cached;

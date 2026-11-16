@@ -21,21 +21,33 @@ export function extractGroups(user: User): string[] {
     ...(user.identities ?? []).flatMap((i) => {
       const d = (i.identity_data ?? {}) as Record<string, unknown>;
       const custom = (d.custom_claims ?? {}) as Record<string, unknown>;
-      return [d.groups, custom.groups, custom["http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"]];
+      return [
+        d.groups,
+        custom.groups,
+        custom["http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"],
+      ];
     }),
   ];
   const out = new Set<string>();
   for (const c of candidates) {
     if (Array.isArray(c)) c.forEach((g) => typeof g === "string" && out.add(g));
-    else if (typeof c === "string") c.split(",").map((s) => s.trim()).filter(Boolean).forEach((g) => out.add(g));
+    else if (typeof c === "string")
+      c.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((g) => out.add(g));
   }
   return [...out];
 }
 
-export function pickRole(groups: string[], mappings: { group_value: string; role: string }[]): UserRole | null {
+export function pickRole(
+  groups: string[],
+  mappings: { group_value: string; role: string }[],
+): UserRole | null {
   let best: UserRole | null = null;
   for (const m of mappings) {
-    if (groups.includes(m.group_value) && isRole(m.role) && roleRank(m.role) > roleRank(best)) best = m.role;
+    if (groups.includes(m.group_value) && isRole(m.role) && roleRank(m.role) > roleRank(best))
+      best = m.role;
   }
   return best;
 }
@@ -52,14 +64,27 @@ export async function handleSessionSync(request: Request): Promise<Response> {
     .from("profiles")
     .select("id, role, is_active, provisioning_source, identity_provider")
     .eq("id", user.id)
-    .maybeSingle<{ id: string; role: string; is_active: boolean; provisioning_source: string; identity_provider: string }>();
+    .maybeSingle<{
+      id: string;
+      role: string;
+      is_active: boolean;
+      provisioning_source: string;
+      identity_provider: string;
+    }>();
   if (!profile) return json({ status: "pending" });
 
   const patch: Record<string, unknown> = { last_sign_in_at: new Date().toISOString() };
-  const isSso = (user.app_metadata?.provider ?? "").toString().startsWith("sso") || profile.identity_provider.startsWith("sso");
+  const isSso =
+    (user.app_metadata?.provider ?? "").toString().startsWith("sso") ||
+    profile.identity_provider.startsWith("sso");
   if (process.env.SSO_GROUP_SYNC === "true" && isSso) {
-    const { data: mappings } = await admin.from("sso_group_role_mappings").select("group_value, role");
-    const role = pickRole(extractGroups(user), (mappings ?? []) as { group_value: string; role: string }[]);
+    const { data: mappings } = await admin
+      .from("sso_group_role_mappings")
+      .select("group_value, role");
+    const role = pickRole(
+      extractGroups(user),
+      (mappings ?? []) as { group_value: string; role: string }[],
+    );
     if (role && (profile.is_active || profile.provisioning_source === "pending_approval")) {
       patch.role = role;
       if (profile.provisioning_source === "pending_approval") {
@@ -71,7 +96,11 @@ export async function handleSessionSync(request: Request): Promise<Response> {
   await admin.from("profiles").update(patch).eq("id", user.id);
   const active = (patch.is_active as boolean | undefined) ?? profile.is_active;
   return json({
-    status: active ? "active" : profile.provisioning_source === "pending_approval" ? "pending" : "disabled",
+    status: active
+      ? "active"
+      : profile.provisioning_source === "pending_approval"
+        ? "pending"
+        : "disabled",
     role: (patch.role as string | undefined) ?? profile.role,
   });
 }

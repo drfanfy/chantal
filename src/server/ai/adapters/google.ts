@@ -24,7 +24,14 @@ export const googleAdapter: ProviderAdapter = {
   id: "google",
   label: "Google Gemini",
   description: "Gemini API (generateContent, streaming). Texte uniquement en V1.",
-  supported: { text: true, streaming: true, vision: false, files: false, structured_output: false, tools: false },
+  supported: {
+    text: true,
+    streaming: true,
+    vision: false,
+    files: false,
+    structured_output: false,
+    tools: false,
+  },
   supportsTemperature: true,
   requiresBaseUrl: false,
   officialHosts: ["generativelanguage.googleapis.com"],
@@ -34,9 +41,16 @@ export const googleAdapter: ProviderAdapter = {
     const base = (conn.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, "");
     const contents = req.messages.map((m) => {
       if (typeof m.content !== "string" && m.content.some((p) => p.type !== "text")) {
-        throw new ProviderError("bad_request", undefined, "Pièces jointes non prises en charge par l'adaptateur Gemini V1");
+        throw new ProviderError(
+          "bad_request",
+          undefined,
+          "Pièces jointes non prises en charge par l'adaptateur Gemini V1",
+        );
       }
-      const text = typeof m.content === "string" ? m.content : m.content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
+      const text =
+        typeof m.content === "string"
+          ? m.content
+          : m.content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
       return { role: m.role === "assistant" ? "model" : "user", parts: [{ text }] };
     });
     const body: Record<string, unknown> = {
@@ -50,26 +64,43 @@ export const googleAdapter: ProviderAdapter = {
 
     let res: Response;
     try {
-      res = await fetch(`${base}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": conn.apiKey ?? "" },
-        body: JSON.stringify(body),
-        signal: req.signal,
-        redirect: "manual",
-      });
+      res = await fetch(
+        `${base}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": conn.apiKey ?? "" },
+          body: JSON.stringify(body),
+          signal: req.signal,
+          redirect: "manual",
+        },
+      );
     } catch {
       if (req.signal.aborted) throw new ProviderError("cancelled");
       throw new ProviderError("network");
     }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
-      throw new ProviderError(errorCodeFromStatus(res.status), res.status, sanitizeDetail(text, [conn.apiKey]));
+      throw new ProviderError(
+        errorCodeFromStatus(res.status),
+        res.status,
+        sanitizeDetail(text, [conn.apiKey]),
+      );
     }
 
-    let usage: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; cachedContentTokenCount?: number } | undefined;
+    let usage:
+      | {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          thoughtsTokenCount?: number;
+          cachedContentTokenCount?: number;
+        }
+      | undefined;
     for await (const data of readSseData(res.body, req.signal)) {
       let json: {
-        candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
+        candidates?: {
+          content?: { parts?: { text?: string; thought?: boolean }[] };
+          finishReason?: string;
+        }[];
         usageMetadata?: typeof usage;
         promptFeedback?: { blockReason?: string };
         error?: { message?: string; code?: number };
@@ -79,14 +110,20 @@ export const googleAdapter: ProviderAdapter = {
       } catch {
         continue;
       }
-      if (json.error) throw new ProviderError(errorCodeFromStatus(json.error.code ?? 500), json.error.code, sanitizeDetail(json.error.message ?? "", [conn.apiKey]));
+      if (json.error)
+        throw new ProviderError(
+          errorCodeFromStatus(json.error.code ?? 500),
+          json.error.code,
+          sanitizeDetail(json.error.message ?? "", [conn.apiKey]),
+        );
       if (json.promptFeedback?.blockReason) throw new ProviderError("refusal");
       const cand = json.candidates?.[0];
       for (const part of cand?.content?.parts ?? []) {
         if (part.text && !part.thought) yield { type: "text", text: part.text };
       }
       if (cand?.finishReason) {
-        if (cand.finishReason === "SAFETY" || cand.finishReason === "PROHIBITED_CONTENT") throw new ProviderError("refusal");
+        if (cand.finishReason === "SAFETY" || cand.finishReason === "PROHIBITED_CONTENT")
+          throw new ProviderError("refusal");
         yield { type: "finish", reason: cand.finishReason };
       }
       if (json.usageMetadata) usage = json.usageMetadata;
@@ -97,7 +134,10 @@ export const googleAdapter: ProviderAdapter = {
         type: "usage",
         inputTokens: usage.promptTokenCount,
         // Les tokens de réflexion sont facturés comme des tokens de sortie
-        outputTokens: usage.candidatesTokenCount !== undefined ? usage.candidatesTokenCount + (usage.thoughtsTokenCount ?? 0) : undefined,
+        outputTokens:
+          usage.candidatesTokenCount !== undefined
+            ? usage.candidatesTokenCount + (usage.thoughtsTokenCount ?? 0)
+            : undefined,
         cachedInputTokens: usage.cachedContentTokenCount,
       };
     }

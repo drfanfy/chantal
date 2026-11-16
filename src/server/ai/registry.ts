@@ -20,10 +20,14 @@ export function getAdapter(id: string): ProviderAdapter | undefined {
  * Capacités effectives = déclarées par l'administrateur ET réellement
  * exécutées par l'adaptateur. Une case cochée ne suffit jamais.
  */
-export function effectiveCapabilities(adapterId: string, declared: CapabilityMap | null | undefined): CapabilityMap {
+export function effectiveCapabilities(
+  adapterId: string,
+  declared: CapabilityMap | null | undefined,
+): CapabilityMap {
   const adapter = getAdapter(adapterId);
   const out: CapabilityMap = {};
-  for (const c of CAPABILITIES) out[c] = Boolean(adapter?.supported[c] && (c === "text" || declared?.[c]));
+  for (const c of CAPABILITIES)
+    out[c] = Boolean(adapter?.supported[c] && (c === "text" || declared?.[c]));
   return out;
 }
 

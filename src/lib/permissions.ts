@@ -67,7 +67,12 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "user.manage_super": "Gérer les super admins, rattacher des comptes",
 };
 
-const VIEWER: Permission[] = ["prompt.read", "conversation.read_shared", "workflow.read", "formation.read"];
+const VIEWER: Permission[] = [
+  "prompt.read",
+  "conversation.read_shared",
+  "workflow.read",
+  "formation.read",
+];
 const BETA: Permission[] = [...VIEWER, "chat.use", "conversation.share", "workflow.run"];
 const ADMIN: Permission[] = [
   ...BETA,
@@ -82,7 +87,13 @@ const ADMIN: Permission[] = [
   "ticket.manage",
   "formation.manage",
 ];
-const SUPER: Permission[] = [...ADMIN, "model.manage", "conversation.moderate", "settings.manage", "user.manage_super"];
+const SUPER: Permission[] = [
+  ...ADMIN,
+  "model.manage",
+  "conversation.moderate",
+  "settings.manage",
+  "user.manage_super",
+];
 
 export const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
   viewer: new Set(VIEWER),

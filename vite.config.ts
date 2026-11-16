@@ -13,7 +13,9 @@ import { nitro } from "nitro/vite";
 // process.env pour les routes /api. Elles ne sont jamais injectées dans le
 // bundle navigateur (seules les VITE_* le sont). En production (Vercel), elles
 // viennent des variables d'environnement du projet.
-for (const [key, value] of Object.entries(loadEnv(process.env.NODE_ENV === "production" ? "production" : "development", process.cwd(), ""))) {
+for (const [key, value] of Object.entries(
+  loadEnv(process.env.NODE_ENV === "production" ? "production" : "development", process.cwd(), ""),
+)) {
   if (!key.startsWith("VITE_") && process.env[key] === undefined) process.env[key] = value;
 }
 

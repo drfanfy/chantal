@@ -310,3 +310,13 @@
     max-width: 100%; border-radius: 0.75rem; margin: 1em 0; display: block;
     box-shadow: 0 1px 4px 0 rgb(0 0 0 / .08);
   }
+
+/* Barre de navigation défilante sans barre visible (petits écrans) */
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

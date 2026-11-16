@@ -50,14 +50,32 @@ interface HttpConnectionRow {
   is_enabled: boolean;
 }
 
-async function runLlmStep(o: ExecuteRunOptions, step: LlmStep, scope: TemplateScope, signal: AbortSignal, remainingMs: number) {
+async function runLlmStep(
+  o: ExecuteRunOptions,
+  step: LlmStep,
+  scope: TemplateScope,
+  signal: AbortSignal,
+  remainingMs: number,
+) {
   if (!step.modelId) throw new StepError("model_missing", "Aucun modèle choisi pour cette étape");
   // Test administrateur : modèle non encore activé autorisé, mais connexion configurée exigée.
-  const resolved = await resolveModel(o.admin, step.modelId, { role: o.role, purpose: o.isTest ? "test" : "workflows" });
+  const resolved = await resolveModel(o.admin, step.modelId, {
+    role: o.role,
+    purpose: o.isTest ? "test" : "workflows",
+  });
   let system = renderTemplate(step.system ?? "", scope).text;
   if (step.agentId) {
-    const { data: agent } = await o.admin.from("agents").select("system_prompt, is_active, archived_at").eq("id", step.agentId).maybeSingle<{ system_prompt: string | null; is_active: boolean; archived_at: string | null }>();
-    if (!agent || !agent.is_active || agent.archived_at) throw new StepError("agent_unavailable", "Agent indisponible");
+    const { data: agent } = await o.admin
+      .from("agents")
+      .select("system_prompt, is_active, archived_at")
+      .eq("id", step.agentId)
+      .maybeSingle<{
+        system_prompt: string | null;
+        is_active: boolean;
+        archived_at: string | null;
+      }>();
+    if (!agent || !agent.is_active || agent.archived_at)
+      throw new StepError("agent_unavailable", "Agent indisponible");
     system = [agent.system_prompt ?? "", system].filter(Boolean).join("\n\n");
   }
   const prompt = renderTemplate(step.prompt, scope).text;
@@ -65,8 +83,20 @@ async function runLlmStep(o: ExecuteRunOptions, step: LlmStep, scope: TemplateSc
     admin: o.admin,
     userId: o.userId,
     resolved,
-    request: { system: system || undefined, messages: [{ role: "user", content: prompt }], maxOutputTokens: step.maxOutputTokens, responseFormat: step.responseFormat },
-    meta: { source: o.isTest ? "admin_test" : "workflow", workflowId: o.workflowId, workflowRunId: o.runId, stepId: step.id, agentId: step.agentId ?? null, requestId: `wf:${o.runId}:${step.id}` },
+    request: {
+      system: system || undefined,
+      messages: [{ role: "user", content: prompt }],
+      maxOutputTokens: step.maxOutputTokens,
+      responseFormat: step.responseFormat,
+    },
+    meta: {
+      source: o.isTest ? "admin_test" : "workflow",
+      workflowId: o.workflowId,
+      workflowRunId: o.runId,
+      stepId: step.id,
+      agentId: step.agentId ?? null,
+      requestId: `wf:${o.runId}:${step.id}`,
+    },
     signal,
     timeoutMs: Math.max(1000, remainingMs),
     skipLimits: false,
@@ -82,26 +112,50 @@ async function runLlmStep(o: ExecuteRunOptions, step: LlmStep, scope: TemplateSc
   return { value, usageEventId: result.usageEventId };
 }
 
-async function runHttpStep(o: ExecuteRunOptions, step: HttpStep, scope: TemplateScope, signal: AbortSignal, remainingMs: number) {
+async function runHttpStep(
+  o: ExecuteRunOptions,
+  step: HttpStep,
+  scope: TemplateScope,
+  signal: AbortSignal,
+  remainingMs: number,
+) {
   const cfg = serverConfig();
   const { data: conn } = await o.admin
     .from("workflow_http_connections")
-    .select("id, name, base_url, auth_type, auth_header_name, secret_ref, allowed_methods, timeout_ms, max_response_bytes, is_enabled")
+    .select(
+      "id, name, base_url, auth_type, auth_header_name, secret_ref, allowed_methods, timeout_ms, max_response_bytes, is_enabled",
+    )
     .eq("id", step.connectionId)
     .maybeSingle<HttpConnectionRow>();
   if (!conn) throw new StepError("connection_missing", "Connexion HTTP introuvable");
-  if (!conn.is_enabled) throw new StepError("connection_disabled", `Connexion « ${conn.name} » désactivée`);
-  if (!conn.allowed_methods.includes(step.method)) throw new StepError("method_not_allowed", `Méthode ${step.method} non autorisée pour « ${conn.name} »`);
-  const headers: Record<string, string> = { accept: "application/json, text/plain;q=0.9", "user-agent": "CHANTAL-Workflows/1.0" };
+  if (!conn.is_enabled)
+    throw new StepError("connection_disabled", `Connexion « ${conn.name} » désactivée`);
+  if (!conn.allowed_methods.includes(step.method))
+    throw new StepError(
+      "method_not_allowed",
+      `Méthode ${step.method} non autorisée pour « ${conn.name} »`,
+    );
+  const headers: Record<string, string> = {
+    accept: "application/json, text/plain;q=0.9",
+    "user-agent": "CHANTAL-Workflows/1.0",
+  };
   if (conn.auth_type !== "none") {
     const secret = readSecret(conn.secret_ref);
-    if (!secret) throw new StepError("not_configured", `Connexion « ${conn.name} » : secret serveur non configuré`);
+    if (!secret)
+      throw new StepError(
+        "not_configured",
+        `Connexion « ${conn.name} » : secret serveur non configuré`,
+      );
     if (conn.auth_type === "bearer") headers.authorization = `Bearer ${secret}`;
     else headers[(conn.auth_header_name ?? "x-api-key").toLowerCase()] = secret;
   }
   // Valeurs encodées dans le chemin : impossible de sortir de l'URL de base.
-  const path = step.path.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m) => encodeURIComponent(renderTemplate(m, scope).text));
-  const url = await assertSafeUrl(conn.base_url.replace(/\/+$/, "") + path, { allowlist: cfg.workflowHttpAllowedHosts });
+  const path = step.path.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m) =>
+    encodeURIComponent(renderTemplate(m, scope).text),
+  );
+  const url = await assertSafeUrl(conn.base_url.replace(/\/+$/, "") + path, {
+    allowlist: cfg.workflowHttpAllowedHosts,
+  });
   let body: string | undefined;
   if (step.method !== "GET" && step.body.trim()) {
     body = renderTemplate(step.body, scope, { escape: "json" }).text;
@@ -120,7 +174,8 @@ async function runHttpStep(o: ExecuteRunOptions, step: HttpStep, scope: Template
     maxBytes: conn.max_response_bytes,
     signal,
   });
-  if (res.status >= 400) throw new StepError("http_error", `Le service « ${conn.name} » a répondu ${res.status}`);
+  if (res.status >= 400)
+    throw new StepError("http_error", `Le service « ${conn.name} » a répondu ${res.status}`);
   let value: unknown = res.text;
   try {
     value = JSON.parse(res.text);
@@ -130,8 +185,13 @@ async function runHttpStep(o: ExecuteRunOptions, step: HttpStep, scope: Template
   if (step.responsePath) {
     const parts = step.responsePath.split(".");
     let cur: unknown = value;
-    for (const p of parts) cur = cur && typeof cur === "object" ? (cur as Record<string, unknown>)[p] : undefined;
-    if (cur === undefined) throw new StepError("json_path_missing", `Champ « ${step.responsePath} » absent de la réponse`);
+    for (const p of parts)
+      cur = cur && typeof cur === "object" ? (cur as Record<string, unknown>)[p] : undefined;
+    if (cur === undefined)
+      throw new StepError(
+        "json_path_missing",
+        `Champ « ${step.responsePath} » absent de la réponse`,
+      );
     value = cur;
   }
   return { value };
@@ -146,12 +206,23 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
   const signal = o.signal ? AbortSignal.any([o.signal, ctrl.signal]) : ctrl.signal;
 
   await admin.from("workflow_run_steps").insert(
-    definition.steps.map((s, i) => ({ run_id: runId, step_id: s.id, step_type: s.type, step_name: s.name, position: i, status: "pending" })),
+    definition.steps.map((s, i) => ({
+      run_id: runId,
+      step_id: s.id,
+      step_type: s.type,
+      step_name: s.name,
+      position: i,
+      status: "pending",
+    })),
   );
   const startedAt = Date.now();
   await admin
     .from("workflow_runs")
-    .update({ status: "running", started_at: new Date(startedAt).toISOString(), deadline_at: new Date(deadline + 30_000).toISOString() })
+    .update({
+      status: "running",
+      started_at: new Date(startedAt).toISOString(),
+      deadline_at: new Date(deadline + 30_000).toISOString(),
+    })
     .eq("id", runId);
 
   const scope: TemplateScope = { inputs: o.inputs, vars: {} as Record<string, unknown> };
@@ -159,7 +230,12 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
   const setStep = (stepId: string, patch: Record<string, unknown>) =>
     admin.from("workflow_run_steps").update(patch).eq("run_id", runId).eq("step_id", stepId);
 
-  let outcome: RunOutcome = { status: "succeeded", output: null, errorCode: null, errorMessage: null };
+  let outcome: RunOutcome = {
+    status: "succeeded",
+    output: null,
+    errorCode: null,
+    errorMessage: null,
+  };
   let stopped: string | null = null;
 
   try {
@@ -168,7 +244,11 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
         await setStep(step.id, { status: "skipped" });
         continue;
       }
-      if (signal.aborted) throw new StepError(ctrl.signal.aborted ? "timeout" : "cancelled", ctrl.signal.aborted ? "Délai maximum du workflow dépassé" : "Exécution annulée");
+      if (signal.aborted)
+        throw new StepError(
+          ctrl.signal.aborted ? "timeout" : "cancelled",
+          ctrl.signal.aborted ? "Délai maximum du workflow dépassé" : "Exécution annulée",
+        );
       if (step.when && !evaluateCondition(step.when, scope)) {
         await setStep(step.id, { status: "skipped", output_preview: "Condition non remplie" });
         continue;
@@ -192,7 +272,9 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
             break;
           case "condition": {
             value = evaluateCondition(step.condition, scope);
-            if (!value && step.onFalse === "stop") stopped = step.stopMessage?.trim() || "Le workflow s'est arrêté : condition non remplie.";
+            if (!value && step.onFalse === "stop")
+              stopped =
+                step.stopMessage?.trim() || "Le workflow s'est arrêté : condition non remplie.";
             break;
           }
           case "http":
@@ -208,8 +290,16 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
           usage_event_id: usageEventId,
         });
       } catch (e) {
-        const msg = e instanceof StepError || e instanceof ApiError || e instanceof ProviderError ? e.message : "Erreur inattendue";
-        await setStep(step.id, { status: "failed", finished_at: new Date().toISOString(), duration_ms: Date.now() - t0, error_message: msg });
+        const msg =
+          e instanceof StepError || e instanceof ApiError || e instanceof ProviderError
+            ? e.message
+            : "Erreur inattendue";
+        await setStep(step.id, {
+          status: "failed",
+          finished_at: new Date().toISOString(),
+          duration_ms: Date.now() - t0,
+          error_message: msg,
+        });
         throw e;
       }
     }
@@ -223,12 +313,33 @@ export async function executeRun(o: ExecuteRunOptions): Promise<RunOutcome> {
     }
     outcome = { status: "succeeded", output, errorCode: null, errorMessage: null };
   } catch (e) {
-    const timedOut = ctrl.signal.aborted || (e instanceof ProviderError && e.code === "timeout") || (e instanceof StepError && e.code === "timeout");
-    const cancelled = !timedOut && (o.signal?.aborted || (e instanceof ProviderError && e.code === "cancelled"));
-    const code = e instanceof StepError || e instanceof ApiError ? e.code : e instanceof ProviderError ? `provider_${e.code}` : "internal";
-    const message = e instanceof StepError || e instanceof ApiError || e instanceof ProviderError ? e.message : "Erreur inattendue pendant l'exécution";
-    outcome = { status: timedOut ? "timed_out" : cancelled ? "cancelled" : "failed", output: null, errorCode: timedOut ? "timeout" : code, errorMessage: timedOut ? "Délai maximum du workflow dépassé" : message };
-    await admin.from("workflow_run_steps").update({ status: "skipped" }).eq("run_id", runId).eq("status", "pending");
+    const timedOut =
+      ctrl.signal.aborted ||
+      (e instanceof ProviderError && e.code === "timeout") ||
+      (e instanceof StepError && e.code === "timeout");
+    const cancelled =
+      !timedOut && (o.signal?.aborted || (e instanceof ProviderError && e.code === "cancelled"));
+    const code =
+      e instanceof StepError || e instanceof ApiError
+        ? e.code
+        : e instanceof ProviderError
+          ? `provider_${e.code}`
+          : "internal";
+    const message =
+      e instanceof StepError || e instanceof ApiError || e instanceof ProviderError
+        ? e.message
+        : "Erreur inattendue pendant l'exécution";
+    outcome = {
+      status: timedOut ? "timed_out" : cancelled ? "cancelled" : "failed",
+      output: null,
+      errorCode: timedOut ? "timeout" : code,
+      errorMessage: timedOut ? "Délai maximum du workflow dépassé" : message,
+    };
+    await admin
+      .from("workflow_run_steps")
+      .update({ status: "skipped" })
+      .eq("run_id", runId)
+      .eq("status", "pending");
   } finally {
     clearTimeout(timer);
   }

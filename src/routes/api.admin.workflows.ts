@@ -10,9 +10,17 @@ const bodySchema = z.discriminatedUnion("action", [
     action: z.literal("test"),
     workflowId: z.string().uuid(),
     inputs: z.record(z.unknown()).default({}),
-    idempotencyKey: z.string().min(8).max(100).regex(/^[A-Za-z0-9_-]+$/),
+    idempotencyKey: z
+      .string()
+      .min(8)
+      .max(100)
+      .regex(/^[A-Za-z0-9_-]+$/),
   }),
-  z.object({ action: z.literal("publish"), workflowId: z.string().uuid(), changeSummary: z.string().max(500).default("") }),
+  z.object({
+    action: z.literal("publish"),
+    workflowId: z.string().uuid(),
+    changeSummary: z.string().max(500).default(""),
+  }),
 ]);
 
 /** Validation, test et publication des workflows (administrateurs). */
@@ -26,7 +34,8 @@ export const Route = createFileRoute("/api/admin/workflows")({
           parseDefinition(body.definition);
           return json({ valid: true });
         }
-        if (body.action === "test") return json(await testDraft(ctx, body.workflowId, body.inputs, body.idempotencyKey));
+        if (body.action === "test")
+          return json(await testDraft(ctx, body.workflowId, body.inputs, body.idempotencyKey));
         return json({ version: await publishDraft(ctx, body.workflowId, body.changeSummary) });
       }),
     },

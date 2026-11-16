@@ -27,7 +27,11 @@ let adminClient: SupabaseClient | null = null;
 export function getAdminClient(): SupabaseClient {
   const cfg = serverConfig();
   if (!cfg.supabaseUrl || !cfg.supabaseServiceRoleKey) {
-    throw new ApiError(503, "server_not_configured", "Serveur non configuré : SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants");
+    throw new ApiError(
+      503,
+      "server_not_configured",
+      "Serveur non configuré : SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants",
+    );
   }
   adminClient ??= createClient(cfg.supabaseUrl, cfg.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -38,7 +42,11 @@ export function getAdminClient(): SupabaseClient {
 export function userClient(token: string): SupabaseClient {
   const cfg = serverConfig();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
-    throw new ApiError(503, "server_not_configured", "Serveur non configuré : SUPABASE_URL / SUPABASE_ANON_KEY manquants");
+    throw new ApiError(
+      503,
+      "server_not_configured",
+      "Serveur non configuré : SUPABASE_URL / SUPABASE_ANON_KEY manquants",
+    );
   }
   return createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
