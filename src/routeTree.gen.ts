@@ -17,6 +17,15 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatIndexRouteImport } from './routes/chat.index'
 import { Route as ChatConversationIdRouteImport } from './routes/chat.$conversationId'
+import { Route as ApiChatRouteImport } from './routes/api.chat'
+import { Route as ApiWorkflowsRunRouteImport } from './routes/api.workflows.run'
+import { Route as ApiCronMaintenanceRouteImport } from './routes/api.cron.maintenance'
+import { Route as ApiAuthSessionRouteImport } from './routes/api.auth.session'
+import { Route as ApiAiModelsRouteImport } from './routes/api.ai.models'
+import { Route as ApiAdminWorkflowsRouteImport } from './routes/api.admin.workflows'
+import { Route as ApiAdminUsersRouteImport } from './routes/api.admin.users'
+import { Route as ApiAdminAiTestRouteImport } from './routes/api.admin.ai-test'
+import { Route as ApiAdminAiStatusRouteImport } from './routes/api.admin.ai-status'
 
 const TicketsRoute = TicketsRouteImport.update({
   id: '/tickets',
@@ -58,6 +67,51 @@ const ChatConversationIdRoute = ChatConversationIdRouteImport.update({
   path: '/chat/$conversationId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWorkflowsRunRoute = ApiWorkflowsRunRouteImport.update({
+  id: '/api/workflows/run',
+  path: '/api/workflows/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronMaintenanceRoute = ApiCronMaintenanceRouteImport.update({
+  id: '/api/cron/maintenance',
+  path: '/api/cron/maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
+  id: '/api/auth/session',
+  path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiModelsRoute = ApiAiModelsRouteImport.update({
+  id: '/api/ai/models',
+  path: '/api/ai/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminWorkflowsRoute = ApiAdminWorkflowsRouteImport.update({
+  id: '/api/admin/workflows',
+  path: '/api/admin/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminAiTestRoute = ApiAdminAiTestRouteImport.update({
+  id: '/api/admin/ai-test',
+  path: '/api/admin/ai-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminAiStatusRoute = ApiAdminAiStatusRouteImport.update({
+  id: '/api/admin/ai-status',
+  path: '/api/admin/ai-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,8 +120,17 @@ export interface FileRoutesByFullPath {
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
+  '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat/': typeof ChatIndexRoute
+  '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
+  '/api/admin/ai-test': typeof ApiAdminAiTestRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/admin/workflows': typeof ApiAdminWorkflowsRoute
+  '/api/ai/models': typeof ApiAiModelsRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/cron/maintenance': typeof ApiCronMaintenanceRoute
+  '/api/workflows/run': typeof ApiWorkflowsRunRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -76,8 +139,17 @@ export interface FileRoutesByTo {
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
+  '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat': typeof ChatIndexRoute
+  '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
+  '/api/admin/ai-test': typeof ApiAdminAiTestRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/admin/workflows': typeof ApiAdminWorkflowsRoute
+  '/api/ai/models': typeof ApiAiModelsRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/cron/maintenance': typeof ApiCronMaintenanceRoute
+  '/api/workflows/run': typeof ApiWorkflowsRunRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -87,8 +159,17 @@ export interface FileRoutesById {
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/tickets': typeof TicketsRoute
+  '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
   '/chat/': typeof ChatIndexRoute
+  '/api/admin/ai-status': typeof ApiAdminAiStatusRoute
+  '/api/admin/ai-test': typeof ApiAdminAiTestRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/admin/workflows': typeof ApiAdminWorkflowsRoute
+  '/api/ai/models': typeof ApiAiModelsRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/cron/maintenance': typeof ApiCronMaintenanceRoute
+  '/api/workflows/run': typeof ApiWorkflowsRunRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -99,8 +180,17 @@ export interface FileRouteTypes {
     | '/home'
     | '/login'
     | '/tickets'
+    | '/api/chat'
     | '/chat/$conversationId'
     | '/chat/'
+    | '/api/admin/ai-status'
+    | '/api/admin/ai-test'
+    | '/api/admin/users'
+    | '/api/admin/workflows'
+    | '/api/ai/models'
+    | '/api/auth/session'
+    | '/api/cron/maintenance'
+    | '/api/workflows/run'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -109,8 +199,17 @@ export interface FileRouteTypes {
     | '/home'
     | '/login'
     | '/tickets'
+    | '/api/chat'
     | '/chat/$conversationId'
     | '/chat'
+    | '/api/admin/ai-status'
+    | '/api/admin/ai-test'
+    | '/api/admin/users'
+    | '/api/admin/workflows'
+    | '/api/ai/models'
+    | '/api/auth/session'
+    | '/api/cron/maintenance'
+    | '/api/workflows/run'
   id:
     | '__root__'
     | '/'
@@ -119,8 +218,17 @@ export interface FileRouteTypes {
     | '/home'
     | '/login'
     | '/tickets'
+    | '/api/chat'
     | '/chat/$conversationId'
     | '/chat/'
+    | '/api/admin/ai-status'
+    | '/api/admin/ai-test'
+    | '/api/admin/users'
+    | '/api/admin/workflows'
+    | '/api/ai/models'
+    | '/api/auth/session'
+    | '/api/cron/maintenance'
+    | '/api/workflows/run'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -130,8 +238,17 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   LoginRoute: typeof LoginRoute
   TicketsRoute: typeof TicketsRoute
+  ApiChatRoute: typeof ApiChatRoute
   ChatConversationIdRoute: typeof ChatConversationIdRoute
   ChatIndexRoute: typeof ChatIndexRoute
+  ApiAdminAiStatusRoute: typeof ApiAdminAiStatusRoute
+  ApiAdminAiTestRoute: typeof ApiAdminAiTestRoute
+  ApiAdminUsersRoute: typeof ApiAdminUsersRoute
+  ApiAdminWorkflowsRoute: typeof ApiAdminWorkflowsRoute
+  ApiAiModelsRoute: typeof ApiAiModelsRoute
+  ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiCronMaintenanceRoute: typeof ApiCronMaintenanceRoute
+  ApiWorkflowsRunRoute: typeof ApiWorkflowsRunRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +309,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatConversationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/workflows/run': {
+      id: '/api/workflows/run'
+      path: '/api/workflows/run'
+      fullPath: '/api/workflows/run'
+      preLoaderRoute: typeof ApiWorkflowsRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/maintenance': {
+      id: '/api/cron/maintenance'
+      path: '/api/cron/maintenance'
+      fullPath: '/api/cron/maintenance'
+      preLoaderRoute: typeof ApiCronMaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/session': {
+      id: '/api/auth/session'
+      path: '/api/auth/session'
+      fullPath: '/api/auth/session'
+      preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/models': {
+      id: '/api/ai/models'
+      path: '/api/ai/models'
+      fullPath: '/api/ai/models'
+      preLoaderRoute: typeof ApiAiModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/workflows': {
+      id: '/api/admin/workflows'
+      path: '/api/admin/workflows'
+      fullPath: '/api/admin/workflows'
+      preLoaderRoute: typeof ApiAdminWorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/ai-test': {
+      id: '/api/admin/ai-test'
+      path: '/api/admin/ai-test'
+      fullPath: '/api/admin/ai-test'
+      preLoaderRoute: typeof ApiAdminAiTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/ai-status': {
+      id: '/api/admin/ai-status'
+      path: '/api/admin/ai-status'
+      fullPath: '/api/admin/ai-status'
+      preLoaderRoute: typeof ApiAdminAiStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -202,8 +382,17 @@ const rootRouteChildren: RootRouteChildren = {
   HomeRoute: HomeRoute,
   LoginRoute: LoginRoute,
   TicketsRoute: TicketsRoute,
+  ApiChatRoute: ApiChatRoute,
   ChatConversationIdRoute: ChatConversationIdRoute,
   ChatIndexRoute: ChatIndexRoute,
+  ApiAdminAiStatusRoute: ApiAdminAiStatusRoute,
+  ApiAdminAiTestRoute: ApiAdminAiTestRoute,
+  ApiAdminUsersRoute: ApiAdminUsersRoute,
+  ApiAdminWorkflowsRoute: ApiAdminWorkflowsRoute,
+  ApiAiModelsRoute: ApiAiModelsRoute,
+  ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiCronMaintenanceRoute: ApiCronMaintenanceRoute,
+  ApiWorkflowsRunRoute: ApiWorkflowsRunRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

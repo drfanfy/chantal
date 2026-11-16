@@ -18,7 +18,7 @@
 
 - [x] Analyse du dépôt et diagnostic
 - [x] Migrations + harnais de test PGlite (`npm run test:db`, 29 tests verts)
-- [ ] Couche serveur (auth, permissions, adaptateurs IA, usage)
+- [x] Couche serveur (auth, permissions, adaptateurs IA, usage, chat SSE, moteur workflows, routes /api/*) — 35 tests unitaires
 - [ ] Chat privé / partage
 - [ ] Favoris + activité récente
 - [ ] Prompts versionnés
@@ -33,3 +33,4 @@
 
 - 2026-11-16 : branche créée, diagnostic posé.
 - 2026-11-16 : migrations 20261116000100→000900 écrites et testées (RLS, gardes, versions, reporting, provisioning). Pièges notés : fonctions de garde en SECURITY INVOKER (sinon current_user=postgres), policy SELECT conversations inline (INSERT…RETURNING).
+- 2026-11-16 : couche serveur src/server/* + routes src/routes/api.*.ts ; build OK, aucun code serveur dans le bundle client. Prochaine étape : refonte client (chat, accueil, prompts, workflows, reporting, admin, login).
